@@ -10,7 +10,7 @@ from scipy.spatial.qhull import QhullError
 import matplotlib.pyplot as plt
 import sys
 
-def facet_neighborhood(mesh_,elt_):
+def facet_neighborhood(mesh_):
     """Returns a dictionnary containing as key the index of the facets and as values the list of indices of the cells (or cell) containing the facet. """
     indices = dict([])
 
@@ -22,47 +22,20 @@ def facet_neighborhood(mesh_,elt_):
         indices[f.index()] = voisins_num
     return indices
 
-def position_ddl_cells(mesh_,elt_): #Renvoie les cellules voisines d'une cellule donnée et leurs positions
+def position_ddl_cells(mesh_,d_):
+    """Returns a dictionnary having as key the index of a cell and as value the position of its dof."""
+    dim_ = mesh_.geometric_dimension()
+    
+    if d_ == 1:
+        U_DG = FunctionSpace(mesh_, 'DG', 0) #scalar case
+    elif d_ == dim_:
+        U_DG = VectorFunctionSpace(mesh_, 'DG', 0) #vectorial case
+    elt = U_DG.element()
+    
     cell_pos = dict([])
     for c in cells(mesh_):
-        cell_pos[c.index()] = elt_.tabulate_dof_coordinates(c)[0]
+        cell_pos[c.index()] = elt.tabulate_dof_coordinates(c)[0]
     return cell_pos
-
-def position_vertex_bord(mesh_,face_num):
-    vertex_pos = set()
-    for f in facets(mesh_):
-        if len(face_num.get(f.index())) == 1: #face sur le bord
-            for v in vertices(f):
-                vertex_pos.add( (v.x(0),v.x(1),v.x(2)) )
-    return vertex_pos
-
-def cell_neighbors(mesh_,elt_): #Renvoie les cellules voisines d'une cellule donnée et leurs positions
-    cell_num = dict([])
-    cell_pos = dict([])
-    for cell in cells(mesh_):
-        num = []
-        pos = []
-        for f in facets(cell):
-            for c in cells(f):
-                if c.index() != cell.index():
-                    num.append(c.index())
-                    pos.append(elt_.tabulate_dof_coordinates(c)[0])
-        cell_num[cell.index()] = num
-        cell_pos[cell.index()] = pos
-    return cell_num,cell_pos
-
-def four_set(dico):
-    res = []
-    for i,j in dico.items():
-        for k,l in dico.items():
-            if k > i:
-                for m,n in dico.items():
-                    if m > k and m > i:
-                        for o,p in dico.items():
-                            if o > m and o > k and o > i:
-                                dico = {i:j, k:l, m:n, o:p}
-                                res.append(dico)
-    return res
 
 def tetra_face(face_num,face_pos,cell_num,cell_pos):
     result_num = dict([])
@@ -501,301 +474,12 @@ def dico_position_vertex_bord(mesh_, face_num, nb_ddl_cellules, d_, dim):
 
     return vertex_associe_face,pos_ddl_vertex,num_ddl_vertex_ccG
 
-def min_I_mesh(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim,d_,h_): #pos_vert contient les positions des barycentres sur les faces au bord
-    toutes_pos_ddl = [] #ordre : d'abord tous les ddl de cellules puis tous ceux des vertex au bord
-    for i in pos_bary_cells.values():
-        toutes_pos_ddl.append(i)
-    for i in pos_vert.values():
-        toutes_pos_ddl.append(i)
-    toutes_pos_ddl = np.array(toutes_pos_ddl)
-    tree = KDTree(toutes_pos_ddl)
-
-    #outputs
-    nb_inner_facets = 0
-    extrapolating_facets = 0
-    I=0 #on cherche sa valeur
-    J = dict()
-    for i,j in face_n_num.items():
-        if len(j) > 1: #cad facette pas au bord
-            nb_inner_facets += 1
-            x = pos_bary_facets.get(i) #position du barycentre de la face
-            nb_voisins = dim+1
-            distance,pos_voisins = tree.query(x, 20) #valeur fixée ici (pour etre large !)
-            data_convex_hull = [] #[] #[x]
-            for k in range(nb_voisins):
-                data_convex_hull.append(tree.data[pos_voisins[k]])
-
-            #computation of closest non-degenerate simplex
-            degenerate = True
-            convex_aux = ConvexHull(data_convex_hull,qhull_options='Qc QJ Pp', incremental=True)    
-
-            while degenerate:
-                if convex_aux.volume < 1.e-5 * h_**3: #ajouter un point et recommencer
-                    nb_voisins += 1
-                    I = max(I,nb_voisins)
-                    convex_aux.add_points([tree.data[pos_voisins[nb_voisins-1]]])
-                else: #fini
-                    if nb_voisins not in J:
-                        J[nb_voisins] = 1
-                    else:
-                        J[nb_voisins] += 1
-                    degenerate = False
-                    convex_aux.close()
-            
-    return I,J #J est le bon. Sortir les valeurs propres par contre...
-
-def comparison_bary_coord_old(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim,d_,h_): #pos_vert contient les positions des barycentres sur les faces au bord
-    toutes_pos_ddl = [] #ordre : d'abord tous les ddl de cellules puis tous ceux des vertex au bord
-    for i in pos_bary_cells.values():
-        toutes_pos_ddl.append(i)
-    for i in pos_vert.values():
-        toutes_pos_ddl.append(i)
-    toutes_pos_ddl = np.array(toutes_pos_ddl)
-    tree = KDTree(toutes_pos_ddl)
-    tous_num_ddl = np.arange(len(toutes_pos_ddl) * d_)
-    #calcul du convexe associé à chaque face
-    res_num = dict([])
-    res_pos = dict([])
-    res_coord = dict([])
-
-    #outputs
-    nb_inner_facets = 0
-    extrapolating_facets = 0
-    I=6 #paramètre à faire bouger
-    J = dict()
-    for i,j in face_n_num.items():
-        if len(j) > 1: #cad face pas au bord
-            nb_inner_facets += 1
-            aux_num = []
-            aux_pos = []
-            x = pos_bary_facets.get(i) #position du barycentre de la face      
-            nb_voisins = max(dim+1,I) #dim+1 #max(dim+1,I) #4 #5 #6 #9 #12 #15
-            distance,pos_voisins = tree.query(x, 20) #valeur fixée ici (pour etre large !)
-            #print('Distances:')
-            #print(distance)
-            data_convex_hull = [x]
-            for k in range(nb_voisins):
-                data_convex_hull.append(tree.data[pos_voisins[k]])
-
-            #computation of closest non-degenerate simplex
-            degenerate = True
-            test_simplex = False #True
-            simplex = data_convex_hull[1:dim+2]
-            if test_simplex:
-                nb_points = dim+1
-                convex_aux = ConvexHull(simplex,qhull_options='Qc QJ Pp', incremental=True)
-            else:
-                nb_points = nb_voisins
-                convex_aux = ConvexHull(data_convex_hull,qhull_options='Qc QJ Pp')    
-
-            while degenerate:
-                if convex_aux.volume < 1.e-5 * h_**3: #ajouter un point et recommencer
-                    #print(convex_aux.volume)
-                    nb_points += 1
-                    I = max(I,nb_points)
-                    print(nb_points)
-                    convex_aux.add_points([tree.data[pos_voisins[nb_points]]])
-                    #print(convex_aux.volume)
-                    simplex.append(tree.data[pos_voisins[nb_points]])
-                else: #finie
-                    if nb_points not in J:
-                        J[nb_points] = 1
-                    else:
-                        J[nb_points] += 1
-                    #print(convex_aux.volume)
-                    #print(len(convex_aux.vertices))
-                    degenerate = False
-                    convex_aux.close()
-
-            if test_simplex:
-                convexe = ConvexHull([x]+simplex,qhull_options='Qc QJ Pp')
-                #print(len([x]+simplex))
-                #print(len(data_convex_hull))
-            else:
-                convexe = ConvexHull(data_convex_hull,qhull_options='Qc QJ Pp') # p C-1.e-4') #Tv #QJ
-            #print('Nb points in cloud: %i' % len(convexe.points))
-
-            #test=False
-            if 0 not in convexe.vertices: #interpolation
-                test=True
-                #Faire une triangulation de Delaunay des points du convexe
-                list_points = convexe.points
-                delau = Delaunay(list_points[1:]) #on retire le barycentre de la face de ces données. On ne le veut pas dans le Delaunay
-                #Ensuite, utiliser le transform sur le Delaunay pour avoir les coords bary du bay de la face. Il reste seulement à trouver dans quel tétra est-ce que toutes les coords sont toutes positives !
-                trans = delau.transform
-                num_simplex = delau.find_simplex(x)
-                coord_bary = delau.transform[num_simplex,:dim].dot(x - delau.transform[num_simplex,dim])
-                coord_bary = np.append(coord_bary, 1. - coord_bary.sum())
-                res_coord[i] = coord_bary
-                for k in delau.simplices[num_simplex]:
-                    num = pos_voisins[k] #not k-1 because the barycentre of the face x has been removed from the Delaunay triangulation
-                    if d_ == 1:
-                        aux_num.append([num]) #numéro dans vecteur ccG
-                    elif d_ == 2:
-                        aux_num.append([num * d_, num * d_ + 1])
-                    elif d_ == 3:
-                        aux_num.append([num * d_, num * d_ + 1, num * d_ + 2])
-                
-            else: #extrapolation with closest smallest non-degenerate simplex
-                test=False
-                extrapolating_facets += 1
-                #taking the last point in the hull and the dim first !
-                mat = []
-                mat.append(convex_aux.points[0] - convex_aux.points[-1])
-                if d_ == 3: #to have a second vector not colinear with the first
-                    for k in np.arange(len(convex_aux.points))+1:
-                        test = convex_aux.points[k] - convex_aux.points[-1]
-                        test /= np.linalg.norm(test)
-                        if np.linalg.norm(np.cross(test, mat[0] / np.linalg.norm(mat[0]))) > 1.e-5:
-                            mat.append(convex_aux.points[k] - convex_aux.points[-1])
-                            break
-
-                    
-                for k in np.arange(len(convex_aux.points))+1: #to have the last points to have an invertible matrix
-                    test = convex_aux.points[k] - convex_aux.points[-1]
-                    test /= np.linalg.norm(test)
-                    if np.absolute(np.linalg.det(np.array([mat[0]/np.linalg.norm(mat[0]),mat[1]/np.linalg.norm(mat[1])] + [test]))) >  1.e-5:
-                            mat.append(convex_aux.points[k] - convex_aux.points[-1])
-                            break
-                        
-
-                mat = np.array(mat)
-                assert(mat.shape == (dim,dim))
-                assert(np.absolute(np.linalg.det(mat)) > 1.e-10) #no degenerate barycentric coordiantes !
-                rhs = np.array(x - convex_aux.points[-1])
-                coord_bary = np.linalg.solve(mat, rhs)
-                coord_bary = np.append(coord_bary, 1. - coord_bary.sum())
-                res_coord[i] = coord_bary
-                for k in range(dim):
-                    num = pos_voisins[k] #not k-1 because the barycentre of the face x has been removed from the Delaunay triangulation
-                    if d_ == 1:
-                        aux_num.append([num]) #numéro dans vecteur ccG
-                    elif d_ == 2:
-                        aux_num.append([num * d_, num * d_ + 1])
-                    elif d_ == 3:
-                        aux_num.append([num * d_, num * d_ + 1, num * d_ + 2])
-                num = pos_voisins[nb_points] #quel rapport avec nb_points ?
-                if d_ == 1:
-                    aux_num.append([num]) #numéro dans vecteur ccG
-                elif d_ == 2:
-                    aux_num.append([num * d_, num * d_ + 1])
-                elif d_ == 3:
-                    aux_num.append([num * d_, num * d_ + 1, num * d_ + 2])
-            
-            try: #checking barycentric coordinates are ok !
-                assert(np.absolute(coord_bary).max() < 1.e3)
-            except AssertionError:
-                print(test)
-                print('Coord bary')
-                print(coord_bary)
-                sys.exit()
-                
-
-            #On associe le tetra à la face
-            #print(test)
-            #print(aux_num)
-            assert(len(aux_num) > 0)
-            res_num[i] = aux_num
-            #print(aux_num
-            res_pos[i] = aux_pos
-
-    print('I = %i' % I)
-    print(J)
-    print('Nb inner facets: %i' % nb_inner_facets)
-    print('Nb extrapolation on inner facets: %i' % extrapolating_facets)
-    print('Percentage related: %.3f%%' % (extrapolating_facets / nb_inner_facets * 100))
-
-    return res_num,res_pos,res_coord,0.
-
-#def dico_position_vertex_bord(mesh_, facets_, face_num, nb_ddl_cellules, d_, dim, BC_D, BC_N): #lists of tags for the various boundary conditions on facets
-#    vertex_associe_face = dict([])
-#    pos_ddl_vertex = dict([])
-#    num_ddl_vertex_ccG = dict([])
-#    compteur = nb_ddl_cellules-1
-#    bc_associe_facet = dict([])
-#    vertex_N = set([]) #index of vertices with Neumann BC
-#    vertex_D = set([]) #index of vertices with Dirichlet BC
-#    for f,g in zip(facets(mesh_),facets_):
-#            if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
-#                bc_associe_facet[f.index()] = g
-#                vertex_associe_face[f.index()] = []
-#                for v in vertices(f):
-#                    if g in BC_D:
-#                        vertex_D.add(v.index())
-#                    elif g in BC_N:
-#                        vertex_N.add(v.index())
-#
-#    #Taking out of vertex_N all vertices with at least one
-#                        
-#    for v in vertices(mesh_):
-#        test_bord = False #pour voir si vertex est sur le bord
-#        for f in facets(v):
-#            if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
-#                vertex_associe_face[f.index()] = vertex_associe_face[f.index()] + [v.index()]
-#                test_bord = True
-#        if test_bord: #vertex est bien sur le bord.
-#            if dim == 2: #pour position du vertex dans l'espace
-#                pos_ddl_vertex[v.index()] = np.array([v.x(0),v.x(1)])
-#            elif dim == 3:
-#                pos_ddl_vertex[v.index()] = np.array([v.x(0),v.x(1),v.x(2)])
-#
-#    #first run for Neumann Boundary conditions
-#    for f,g in zip(facets(mesh_),bc_associe_facet.values()):
-#        if g in BC_N:
-#            if d_ == 2: #pour num du dof du vertex dans vec ccG
-#                num_ddl_vertex_ccG[v.index()] = [compteur+1, compteur+2]
-#                compteur += 2
-#            elif d_ == 3:
-#                num_ddl_vertex_ccG[v.index()] = [compteur+1, compteur+2, compteur+3]
-#                compteur += 3
-#            elif d_ == 1:
-#                num_ddl_vertex_ccG[v.index()] = [compteur+1]
-#                compteur += 1
-#                
-#    #second run for dirichlet boundary conditions
-#    nb_ddl_reduit = compteur+1
-#    for f,g in zip(facets(mesh_),bc_associe_facet.values()):
-#        if g in BC_D:
-#            if d_ == 2: #pour num du dof du vertex dans vec ccG
-#                num_ddl_vertex_ccG[v.index()] = [compteur+1, compteur+2]
-#                compteur += 2
-#            elif d_ == 3:
-#                num_ddl_vertex_ccG[v.index()] = [compteur+1, compteur+2, compteur+3]
-#                compteur += 3
-#            elif d_ == 1:
-#                num_ddl_vertex_ccG[v.index()] = [compteur+1]
-#                compteur += 1
-#
-#    return vertex_associe_face,pos_ddl_vertex,num_ddl_vertex_ccG,nb_ddl_reduit
-
-def schur(A_BC):
-    nb_ddl_ccG = A_BC.shape[0]
-    l = A_BC.nonzero()[0]
-    aux = set(l) #contains number of Dirichlet dof
-    nb_ddl_Dirichlet = len(aux)
-    aux_bis = set(range(nb_ddl_ccG))
-    aux_bis = aux_bis.difference(aux) #contains number of vertex non Dirichlet dof
-    sorted(aux_bis) #sort the set
-
-    #Get non Dirichlet values
-    mat_not_D = sp.dok_matrix((nb_ddl_ccG - nb_ddl_Dirichlet, nb_ddl_ccG))
-    for (i,j) in zip(range(mat_not_D.shape[0]),aux_bis):
-        mat_not_D[i,j] = 1.
-
-    #Get Dirichlet boundary conditions
-    mat_D = sp.dok_matrix((nb_ddl_Dirichlet, nb_ddl_ccG))
-    for (i,j) in zip(range(mat_D.shape[0]),aux):
-        mat_D[i,j] = 1.
-    return mat_not_D.tocsr(), mat_D.tocsr()
-
 def mass_vertex_dofs(mesh_, nb_ddl_ccG_, pos_ddl_vertex, num_ddl_vertex_ccG, d_, dim, rho_):
     res = np.zeros(nb_ddl_ccG_)
     if d_ == dim: #vectorial problem
         U_DG = VectorFunctionSpace(mesh_, "DG", 0)
-        #U_CR = VectorFunctionSpace(mesh_, "CR", 1)
     elif d_ == 1: #scalar problem
         U_DG = FunctionSpace(mesh_, "DG", 0)
-        #U_CR = FunctionSpace(mesh_, "CR", 1)
     elt_DG = U_DG.element()
     nb_ddl_cells = len(U_DG.dofmap().dofs())
             
@@ -930,8 +614,9 @@ def matrice_passage_ccG_CG(mesh_, nb_ddl_ccG_,num_vert_ccG,d_,dim):
 
     return matrice_resultat.tocsr()
 
-def matrice_passage_ccG_DG(nb_ddl_cells,nb_ddl_ccG):
-    return sp.eye(nb_ddl_cells, n = nb_ddl_ccG, format='csr')
+def matrice_passage_ccG_DG(nb_dof_cells_,nb_dof_ccG_):
+    """Creates a csr companion matrix to get the cells values of a DEM vector."""
+    return sp.eye(nb_dof_cells_, n = nb_dof_ccG_, format='csr')
 
 def penalty_boundary_old(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim, num_ddl_vertex_ccG):
     if d_ >= 2:
