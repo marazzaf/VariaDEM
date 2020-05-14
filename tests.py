@@ -40,7 +40,7 @@ passage_ccG_to_DG_1 = DEM_to_DG_1_matrix(mesh, nb_dof_ccG, d, dim, passage_ccG_t
 x = SpatialCoordinate(mesh)
 func = Expression(('x[0]', 'x[1]'), degree = 1)
 u = passage_ccG_to_DG.T * interpolate(func, U_DG).vector().get_local() + passage_ccG_to_CG.T * interpolate(func, U_CG).vector().get_local()
-u += np.ones(nb_dof_ccG)
+u += 0.5 * np.ones(nb_dof_ccG)
 
 test_DG_1 = Function(U_DG_1)
 test_DG_1.vector().set_local(passage_ccG_to_DG_1 * u)
@@ -58,3 +58,8 @@ test_CR.vector().set_local(passage_ccG_to_CR * u)
 
 file.write(test_CR)
 file.write(local_project(grad(test_CR), W))
+
+bnd_CG = Function(U_CG)
+bnd_CG.vector().set_local(passage_ccG_to_CG * u)
+
+file.write(bnd_CG)
