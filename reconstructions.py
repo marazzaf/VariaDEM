@@ -158,3 +158,59 @@ def smallest_convexe_bary_coord_bis(face_n_num,pos_bary_cells,pos_vert,pos_bary_
                 sys.exit()
                                 
     return res_num,res_coord
+
+def matrice_passage_ccG_CR(mesh_, nb_ddl_ccG, conv_num, conv_coord, vertex_associe_face, num_ddl_vertex, d_, dim):
+    if d_ == 1:
+        ECR = FunctionSpace(mesh_, 'CR', 1)
+        EDG = FunctionSpace(mesh_, 'DG', 0)
+    else:
+        ECR = VectorFunctionSpace(mesh_, 'CR', 1)
+        EDG = VectorFunctionSpace(mesh_, 'DG', 0)
+    dofmap_CR = ECR.dofmap()
+    nb_total_dof_CR = len(dofmap_CR.dofs())
+    matrice_resultat = sp.dok_matrix((nb_total_dof_CR,nb_ddl_ccG)) #Matrice vide.
+    for f in facets(mesh_):
+        num_global_face = f.index()
+        num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim - 1, array([num_global_face], dtype="uintp"))
+        convexe_f = conv_num.get(num_global_face)
+        convexe_c = conv_coord.get(num_global_face)
+
+        if convexe_f != None: #Face interne, on interpolle la valeur !
+            for i,j in zip(convexe_f,convexe_c):
+                matrice_resultat[num_global_ddl[0],i[0]] = j
+                if d_ >= 2:
+                    matrice_resultat[num_global_ddl[1],i[1]] = j
+                if d_ == 3:
+                    matrice_resultat[num_global_ddl[2],i[2]] = j
+        else: #Face sur le bord, on interpolle la valeur avec les valeurs aux vertex
+            pos_init = vertex_associe_face.get(num_global_face)
+            #print(pos_init
+            v1 = num_ddl_vertex[pos_init[0]]
+            v2 = num_ddl_vertex[pos_init[1]]
+            if dim == 2:
+                matrice_resultat[num_global_ddl[0], v1[0]] = 0.5
+                matrice_resultat[num_global_ddl[0], v2[0]] = 0.5
+                if d_ == 2: #pb vectoriel
+                    matrice_resultat[num_global_ddl[1], v1[1]] = 0.5
+                    matrice_resultat[num_global_ddl[1], v2[1]] = 0.5
+            if dim == 3:
+                v3 = num_ddl_vertex[pos_init[2]]
+                matrice_resultat[num_global_ddl[0], v1[0]] = 1./3.
+                matrice_resultat[num_global_ddl[0], v2[0]] = 1./3.
+                matrice_resultat[num_global_ddl[0], v3[0]] = 1./3.
+                if d_ >= 2: #deuxième ligne
+                    matrice_resultat[num_global_ddl[1], v1[1]] = 1./3.
+                    matrice_resultat[num_global_ddl[1], v2[1]] = 1./3.
+                    matrice_resultat[num_global_ddl[1], v3[1]] = 1./3.
+                if d_ == 3: #troisième ligne
+                    matrice_resultat[num_global_ddl[2], v1[2]] = 1./3.
+                    matrice_resultat[num_global_ddl[2], v2[2]] = 1./3.
+                    matrice_resultat[num_global_ddl[2], v3[2]] = 1./3.
+                
+        #assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[0],:]) - 1.) < 1.e-10)
+        #if d_ == 2:
+        #    assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[1],:]) - 1.) < 1.e-10)
+        #if d_ == 3:
+        #    assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[2],:]) - 1.) < 1.e-10)
+        
+    return matrice_resultat.tocsr()
