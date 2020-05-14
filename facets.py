@@ -10,91 +10,6 @@ from scipy.spatial.qhull import QhullError
 import matplotlib.pyplot as plt
 import sys
 
-def facet_neighborhood(mesh_):
-    """Returns a dictionnary containing as key the index of the facets and as values the list of indices of the cells (or cell) containing the facet. """
-    indices = dict([])
-
-    for f in facets(mesh_):
-        voisins_num = []
-        for c in cells(f):
-            voisins_num.append(c.index())
-
-        indices[f.index()] = voisins_num
-    return indices
-
-def position_ddl_cells(mesh_,d_):
-    """Returns a dictionnary having as key the index of a cell and as value the position of its dof."""
-    dim_ = mesh_.geometric_dimension()
-    
-    if d_ == 1:
-        U_DG = FunctionSpace(mesh_, 'DG', 0) #scalar case
-    elif d_ == dim_:
-        U_DG = VectorFunctionSpace(mesh_, 'DG', 0) #vectorial case
-    elt = U_DG.element()
-    
-    cell_pos = dict([])
-    for c in cells(mesh_):
-        cell_pos[c.index()] = elt.tabulate_dof_coordinates(c)[0]
-    return cell_pos
-
-def tetra_face(face_num,face_pos,cell_num,cell_pos):
-    result_num = dict([])
-    result_pos = dict([])
-    #for (f, voisins_num),(g,voisins_pos) in zip(face_num.items(),face_pos.items()):
-    for (f,voisins_num),(g,voisins_pos) in zip(face_num.items(),face_pos.items()):
-        #print('face : %i' % f
-        if(len(voisins_num) == 1): #cad face sur le bord
-            result_num[f] = []
-            result_pos[f] = []
-        else: #face interne
-            #dico_cellules_pot_num ={cell_num[voisins_num[0]]:cell_pos.get(voisins_num[0]), cell_num[voisins_num[1]]:cell_pos.get(voisins_num[1])}
-            cellules_pot_num = [voisins_num[0],voisins_num[1]] + cell_num[voisins_num[0]] + cell_num[voisins_num[1]]
-            cellules_pot_pos = [voisins_pos[0],voisins_pos[1]] + cell_pos.get(voisins_num[0]) + cell_pos.get(voisins_num[1])
-            dico_cellules_pot = dict([])
-            for i,j in zip(cellules_pot_num,cellules_pot_pos):
-                dico_cellules_pot[i] = j #création du dico pour avoir les sous-ensembles à 4 éléments ensuite
-            #print(dico_cellules_pot
-            liste_sous_ensembles = four_set(dico_cellules_pot)
-            #print(len(liste_sous_ensembles)
-            for i in liste_sous_ensembles:
-                #print(i
-                if not( tetra_applati(i.values()) ):
-                    result_num[f] = i.keys()
-                    result_pos[f] = i.values
-                    break
-            assert( len(result_num.get(f)) == 4)
-    return result_num,result_pos
-
-def tetra_face_bis(face_num,face_pos,face_nnn_num,face_nnn_pos, h_): #On va aller chercher nnn pour le tetra
-    result_num = dict([])
-    result_pos = dict([])
-    #for (f, voisins_num),(g,voisins_pos) in zip(face_num.items(),face_pos.items()):
-    for f,voisins_num in face_num.items():
-        #print('face : %i' % f
-        if(len(voisins_num) == 1): #cad face sur le bord
-            result_num[f] = []
-            result_pos[f] = []
-        else: #face interne
-            dico_cellules_pot = dict([])
-            for i,j in zip(face_nnn_num.get(f),face_nnn_pos.get(f)):
-                dico_cellules_pot[i] = j #création du dico pour avoir les sous-ensembles à 4 éléments ensuite
-            #print(dico_cellules_pot
-            liste_sous_ensembles = four_set(dico_cellules_pot)
-            #print(len(liste_sous_ensembles)
-            for i in liste_sous_ensembles:
-                #print(i
-                if not( tetra_applati(i.values(), h_) ):
-                    result_num[f] = i.keys()
-                    result_pos[f] = i.values()
-                    break
-            if result_num.get(f) == None:
-                #Faire quoi ?
-                result_num[f] = [voisins_num[0],voisins_num[1],voisins_num[0],voisins_num[1]]
-                voisins_pos = face_pos.get(f)
-                result_pos[f] = [voisins_pos[0],voisins_pos[1],voisins_pos[0],voisins_pos[1]]
-            #assert( len(result_num.get(f)) == 4) #Enlevé car on ne trouvait pas de voisin dans certains cas...
-    return result_num,result_pos
-
 def simplex_facet(facet_n_num,facet_n_pos,facet_nn_num,facet_nn_pos, h_): #On va aller chercher nn pour le triangle
     result_num = dict([])
     result_pos = dict([])
@@ -116,26 +31,6 @@ def simplex_facet(facet_n_num,facet_n_pos,facet_nn_num,facet_nn_pos, h_): #On va
                         break
             assert( len(result_num.get(f)) == 3)
     return result_num,result_pos
-
-def tetra_applati(tetra_face_pos, h_):
-    #print(tetra_face_pos
-    vec_test = np.array([tetra_face_pos[1] - tetra_face_pos[0], tetra_face_pos[2] - tetra_face_pos[0], tetra_face_pos[3] - tetra_face_pos[0]])
-    test = np.dot(vec_test[0], np.cross(vec_test[1], vec_test[2]))
-    #print(test
-    if np.abs(test) < 1.e-5 * h_ * h_ * h_: #1.e-5: #1.e-10:
-        return True
-    else:
-        return False
-
-def tri_applati(tri_pos, h_):
-    #print(tetra_face_pos
-    vec_test = np.array([tri_pos[1] - tri_pos[0], tri_pos[2] - tri_pos[0]])
-    test = np.abs(np.cross(vec_test[0], vec_test[1]))
-    #print(test
-    if test < 1.e-5 * h_ * h_: #1.e-5: #1.e-10: #Pour avoir une erreur relative
-        return True
-    else:
-        return False
 
 def vertex_cellule(mesh_, face_num, nb_ddl_cells, d_): #Donne la position des vertex sur le bord pour chaque cellule
     res_num = dict([])
@@ -165,33 +60,6 @@ def vertex_cellule(mesh_, face_num, nb_ddl_cells, d_): #Donne la position des ve
             res_pos[c.index()] = aux_pos
     return res_num,res_pos,pos_ccG
                 
-
-def facet_n_neighborhood(face_num,face_pos,cell_num,cell_pos, dim): #dimension 2d ou 3d
-    result_num = dict([])
-    result_pos = dict([])
-    for (f,voisins_num),(g,voisins_pos) in zip(face_num.items(),face_pos.items()):
-        if(len(voisins_num) == 1): #cad face sur le bord
-            result_num[f] = [voisins_num[0]] + cell_num[voisins_num[0]]
-            result_pos[f] = [voisins_pos[0]] + cell_pos[voisins_num[0]]
-        else: #face interne
-            #result_num[f] = [voisins_num[0],voisins_num[1]] + cell_num[voisins_num[0]] + cell_num[voisins_num[1]]
-            #result_pos[f] = [voisins_pos[0],voisins_pos[1]] + cell_pos[voisins_num[0]] + cell_pos[voisins_num[1]]
-            result_num[f] = cell_num[voisins_num[0]] + cell_num[voisins_num[1]]
-            result_pos[f] = cell_pos[voisins_num[0]] + cell_pos[voisins_num[1]]
-            assert( len(result_num.get(f)) >= dim+1 )
-    return result_num,result_pos #renvoi les numéros des cellules autour de la face considérée puis la même avec les coodonnées
-
-def facet_nn_neighborhood(face_n_num,face_n_pos,cell_num,cell_pos, dim): #Préparation pour version avec coord bary génréalisées
-    result_num = dict([])
-    result_pos = dict([])
-    for (f,voisins_num),(g,voisins_pos) in zip(face_n_num.items(),face_n_pos.items()):
-        for i in voisins_num:
-            result_num[f] = voisins_num + cell_num[i]
-            result_pos[f] = voisins_pos + cell_pos[i]
-        assert( len(result_num.get(f)) >= dim+1 )
-            #if( len(result_num.get(f)) < 4 ):
-                #print('num face : %i, nb voisins % i' % (f,len(result_num.get(f)))
-    return result_num,result_pos #renvoi les numéros des cellules autour de la face considérée puis la même avec les coodonnées
 
 def add_boundary_dof(mesh_,facet_n_num,facet_nn_num,facet_nn_pos,dico_pos_bary_faces,dico_faces_bord, d_): #va renvoyer des numéros de ddl dans vecteur ccG. Sera plus simple...
     aux_num = dict([])
@@ -228,36 +96,6 @@ def add_boundary_dof(mesh_,facet_n_num,facet_nn_num,facet_nn_pos,dico_pos_bary_f
             res_pos[f.index()] = deja_present_pos + pos_faces
     return res_num,res_pos #On va prendre en compte en plus ces données danns le calcul du convexe entourant chaque face
 
-#def add_vertex_dof(mesh_,facet_n_num,facet_nn_num,facet_nn_pos,dico_pos_bary_faces,dico_vertex_bord, pos_vertex_bord, d_, dico_vert_cell, dico_pos_vert_ccG): #va renvoyer des numéros de ddl dans vecteur ccG. Sera plus simple...
-def add_vertex_dof(facet_nn_num,facet_nn_pos, d_, vertex_num, vertex_pos, vertex_ccG):
-    aux_num = dict([])
-    res_pos = dict(facet_nn_pos)
-    for i,j in facet_nn_num.items():
-        new_num = []
-        for k in j: #On va changer les numéros de cellules par les positions des ddl dans vecteur ccG
-            num_ddl_ccG = [k] #k est le num de la cellule. On met les positions des ddl de la face dans vecteur ccG.
-            if d_ == 2:
-                num_ddl_ccG = [k*d_, k*d_+1]
-            elif d_ == 3:
-                num_ddl_ccG = [k*d_, k*d_+1, k*d_+2]
-            new_num.append(num_ddl_ccG)
-        aux_num[i] = new_num #On réassocie les ddl voisins de ceux de la face de num i
-    #On va ajouter les ddl des vertex sur le bord
-    #Il faut chercher dans les faces voisines de cet
-    for (i,j),k in zip(facet_nn_num.items(),facet_nn_pos.values()):
-    #Ajouter le numéro des vertex au bord (dans vecteur ccG)
-        for l in j: #l est le numéro des cellules nn de i
-            if vertex_num.get(l) != None:
-                aux_aux_num = []
-                aux_pos = []
-                for v,w in zip(vertex_num.get(l),vertex_pos.get(l)):
-                    aux_aux_num.append(vertex_ccG.get(v))
-                    aux_pos.append(np.array(w))
-                aux_num[i] = aux_num[i] + aux_aux_num
-                res_pos[i] = facet_nn_pos[i] + aux_pos
-    
-    return aux_num,res_pos #On va prendre en compte en plus ces connées danns le calcul du convexe entourant chaque face
-
 def barycentric_coord_2d(points, x): #On évalue dans tetra de points les coordonnées de x
     mat = np.array([np.append(points[0], 1.), np.append(points[1], 1.), np.append(points[2], 1.)]).T
     if np.abs(np.linalg.det(mat)) < 1.e-10:
@@ -269,15 +107,23 @@ def barycentric_coord_2d(points, x): #On évalue dans tetra de points les coordo
         assert(np.abs(np.sum(res) - 1.0) < 1.e-14) #valeur ici bien choisie ? Prendre valeur relativ
         return res
 
-def dico_position_bary_face(mesh_,dofmap_,elt_):
-    resultat = dict([])
+def dico_position_bary_face(mesh_, d_):
+    """Creates a dictionary whose keys are the index of the facets of the mesh and the values the positions of the barycentre of the facets.""" 
+    dim = mesh_.geometric_dimension()
+    if dim == d_:
+        U_CR = VectorFunctionSpace(mesh_, 'CR', 1) #vectorial case
+    elif dim == 1:
+        U_CR = FunctionSpace(mesh_, 'CR', 1) #scalar case
+    elt = U_CR.element()
+        
+    result = dict([])
     for cell in cells(mesh_):
-        num_local_face = -1
+        local_num_facet = -1
         for f in facets(cell):
-            num_local_face += 1
-            pos_dof_cell = elt_.tabulate_dof_coordinates(cell)
-            resultat[f.index()] = pos_dof_cell[num_local_face]
-    return resultat
+            local_num_facet += 1
+            pos_dof_cell = elt.tabulate_dof_coordinates(cell)
+            result[f.index()] = pos_dof_cell[local_num_facet]
+    return result
 
 def smallest_convexe_bary_coord(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim,d_,h_,h_min,Tetra=True): #pos_vert contient les positions des barycentres sur les faces au bord
     stencil = 0. #distance max utilisée pour reconstruire une valeur
@@ -595,28 +441,6 @@ def matrice_passage_ccG_CR(mesh_, nb_ddl_ccG, conv_num, conv_coord, vertex_assoc
         
     return matrice_resultat.tocsr()
 
-def matrice_passage_ccG_CG(mesh_, nb_ddl_ccG_,num_vert_ccG,d_,dim):
-    if d_ == 1:
-        U_CG = FunctionSpace(mesh_,'CG', 1)
-    elif d_ == dim:
-        U_CG = VectorFunctionSpace(mesh_,'CG', 1)
-    nb_ddl_CG = U_CG.dofmap().global_dimension()
-    matrice_resultat = sp.dok_matrix((nb_ddl_CG,nb_ddl_ccG_)) #Matrice vide.
-    vert_to_dof = vertex_to_dof_map(U_CG)
-
-    #mettre des 1 à la bonne place dans la matrice...
-    for (i,j),k in zip(num_vert_ccG.items(),range(nb_ddl_ccG_)): #On boucle sur le numéro des vertex
-        matrice_resultat[vert_to_dof[i*d_], j[0]] = 1.
-        if d_ >= 2:
-            matrice_resultat[vert_to_dof[i*d_]+1, j[1]] = 1.
-        if d_ == 3:
-            matrice_resultat[vert_to_dof[i*d_]+2, j[2]] = 1.
-
-    return matrice_resultat.tocsr()
-
-def matrice_passage_ccG_DG(nb_dof_cells_,nb_dof_ccG_):
-    """Creates a csr companion matrix to get the cells values of a DEM vector."""
-    return sp.eye(nb_dof_cells_, n = nb_dof_ccG_, format='csr')
 
 def penalty_boundary_old(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim, num_ddl_vertex_ccG):
     if d_ >= 2:
