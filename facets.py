@@ -546,46 +546,6 @@ def smallest_convexe_bary_coord_bis(face_n_num,pos_bary_cells,pos_vert,pos_bary_
                                 
     return res_num,res_coord
 
-def matrice_passage_ccG_DG_1(mesh_, nb_ddl_ccG_, d_, dim_,mat_grad, passage_ccG_CR):
-    if d_ == 1:
-        EDG_0 = FunctionSpace(mesh_, 'DG', 0)
-        EDG_1 = FunctionSpace(mesh_, 'DG', 1)
-        tens_DG_0 = VectorFunctionSpace(mesh_, 'DG', 0)
-    else:
-        EDG_0 = VectorFunctionSpace(mesh_, 'DG', 0)
-        EDG_1 = VectorFunctionSpace(mesh_, 'DG', 1)
-        tens_DG_0 = TensorFunctionSpace(mesh_, 'DG', 0)
-    dofmap_DG_0 = EDG_0.dofmap()
-    dofmap_DG_1 = EDG_1.dofmap()
-    dofmap_tens_DG_0 = tens_DG_0.dofmap()
-    elt_0 = EDG_0.element()
-    elt_1 = EDG_1.element()
-    nb_total_dof_DG_1 = len(dofmap_DG_1.dofs())
-    nb_ddl_grad = len(dofmap_tens_DG_0.dofs())
-    matrice_resultat_1 = sp.dok_matrix((nb_total_dof_DG_1,nb_ddl_ccG_)) #Matrice vide.
-    matrice_resultat_2 = sp.dok_matrix((nb_total_dof_DG_1,nb_ddl_grad)) #Matrice vide.
-    
-    for c in cells(mesh_):
-        index_cell = c.index()
-        dof_position = dofmap_DG_1.cell_dofs(index_cell)
-
-        #filling-in the matrix to have the constant cell value
-        DG_0_dofs = dofmap_DG_0.cell_dofs(index_cell)
-        for dof in dof_position:
-            #print(dof,dof % d_)
-            matrice_resultat_1[dof, DG_0_dofs[dof % d_]] = 1.
-
-        #filling-in part to add the gradient term
-        position_barycentre = elt_0.tabulate_dof_coordinates(c)[0]
-        pos_dof_DG_1 = elt_1.tabulate_dof_coordinates(c)
-        tens_dof_position = dofmap_tens_DG_0.cell_dofs(index_cell)
-        for dof,pos in zip(dof_position,pos_dof_DG_1): #loop on quadrature points
-            diff = pos - position_barycentre
-            for i in range(dim_):
-                matrice_resultat_2[dof, tens_dof_position[(dof % d_)*d_ + i]] = diff[i]
-        
-    return matrice_resultat_1 +  matrice_resultat_2 * mat_grad * passage_ccG_CR
-
 def local_project(v, V, u=None):
     dv = TrialFunction(V)
     v_ = TestFunction(V)
@@ -827,21 +787,3 @@ def comparison_bary_coord(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim
     print('Percentage related: %.5e%%' % (extrapolating_facets / nb_inner_facets * 100))
 
     return res_num,res_coord
-
-def gradient_matrix(mesh_, d_):
-    if d_ == 1:
-        W = VectorFunctionSpace(mesh_, 'DG', 0)
-        U_CR = FunctionSpace(mesh_, 'CR', 1)
-    elif d_ >= 2:
-        W = TensorFunctionSpace(mesh_, 'DG', 0)
-        U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
-
-    vol = CellVolume(mesh_)
-
-    #variational form gradient
-    u_CR = TrialFunction(U_CR)
-    Dv_DG = TestFunction(W)
-    a = inner(grad(u_CR), Dv_DG) / vol * dx
-    A = assemble(a)
-    row,col,val = as_backend_type(A).mat().getValuesCSR()
-    return sp.csr_matrix((val, col, row))

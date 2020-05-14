@@ -30,12 +30,12 @@ print('nb dof ccG : %i' % nb_dof_ccG)
 convexe_num,convexe_coord = smallest_convexe_bary_coord_bis(facet_num,pos_bary_cells,pos_ddl_vertex,dico_pos_bary_faces,dim,d)
 print('Convexe ok !')
 passage_ccG_to_CR = matrice_passage_ccG_CR(mesh, nb_dof_ccG, convexe_num, convexe_coord, vertex_associe_face, num_ddl_vertex_ccG, d, dim)
-passage_ccG_to_CG = matrice_passage_ccG_CG(mesh, nb_dof_ccG,num_ddl_vertex_ccG,d,dim)
-passage_ccG_to_DG = matrice_passage_ccG_DG(nb_dof_cells,nb_dof_ccG)
+passage_ccG_to_CG = DEM_to_CG_matrix(mesh, nb_dof_ccG,num_ddl_vertex_ccG,d,dim)
+passage_ccG_to_DG = DEM_to_DG_matrix(nb_dof_cells,nb_dof_ccG)
 print('matrices passage ok !')
 
-mat_grad = gradient_matrix(mesh, d)
-passage_ccG_to_DG_1 = matrice_passage_ccG_DG_1(mesh, nb_dof_ccG, d, dim, mat_grad, passage_ccG_to_CR)
+#mat_grad = gradient_matrix(mesh, d)
+passage_ccG_to_DG_1 = DEM_to_DG_1_matrix(mesh, nb_dof_ccG, d, dim, passage_ccG_to_CR)
 
 #test P1 consistency and that's all
 x = SpatialCoordinate(mesh)
