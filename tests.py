@@ -6,17 +6,14 @@ from mesh_related import *
 print(facet_neighborhood.__doc__)
 
 L = 0.5
-nb_elt = 10
-mesh = RectangleMesh(Point(-L,-L),Point(L,L),nb_elt,nb_elt,"crossed")
+nb_elt = 5
+#mesh = RectangleMesh(Point(-L,-L),Point(L,L),nb_elt,nb_elt,"crossed")
+mesh = mesh = BoxMesh(Point(0., 0., 0.), Point(L, L, L), nb_elt, nb_elt, nb_elt)
 dim = mesh.geometric_dimension()
 d = dim #vectorial problem
 
 #Function spaces
 U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
-U_DG_1 = VectorFunctionSpace(mesh, 'DG', 1)
-U_CR = VectorFunctionSpace(mesh, 'CR', 1) #Pour interpollation dans les faces
-U_CG = VectorFunctionSpace(mesh, 'CG', 1) #Pour bc
-W = TensorFunctionSpace(mesh, 'DG', 0)
 
 #DEM reconstruction
 nb_dof_cells = U_DG.dofmap().global_dimension()
@@ -36,10 +33,17 @@ print('matrices passage ok !')
 #mat_grad = gradient_matrix(mesh, d)
 passage_ccG_to_DG_1 = DEM_to_DG_1_matrix(mesh, nb_dof_ccG, d, dim, passage_ccG_to_CR)
 
+#Functional Spaces
+U_DG_1 = VectorFunctionSpace(mesh, 'DG', 1)
+U_CR = VectorFunctionSpace(mesh, 'CR', 1) #Pour interpollation dans les faces
+U_CG = VectorFunctionSpace(mesh, 'CG', 1) #Pour bc
+W = TensorFunctionSpace(mesh, 'DG', 0)
+
 #test P1 consistency and that's all
 x = SpatialCoordinate(mesh)
-func = Expression(('x[0]', 'x[1]'), degree = 1)
-u = passage_ccG_to_DG.T * interpolate(func, U_DG).vector().get_local() + passage_ccG_to_CG.T * interpolate(func, U_CG).vector().get_local()
+#func = Expression(('x[0]', 'x[1]'), degree = 1)
+#u = passage_ccG_to_DG.T * interpolate(func, U_DG).vector().get_local() + passage_ccG_to_CG.T * interpolate(func, U_CG).vector().get_local()
+u = passage_ccG_to_DG.T * local_project(x, U_DG).vector().get_local() + passage_ccG_to_CG.T * local_project(x, U_CG).vector().get_local()
 u += 0.5 * np.ones(nb_dof_ccG)
 
 test_DG_1 = Function(U_DG_1)

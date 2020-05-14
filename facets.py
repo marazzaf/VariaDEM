@@ -3,10 +3,6 @@ from fenics import *
 import numpy as np
 from numpy.linalg import norm
 import scipy.sparse as sp
-from scipy.spatial import ConvexHull
-from scipy.spatial import Delaunay
-from scipy.spatial import KDTree
-from scipy.spatial.qhull import QhullError
 import matplotlib.pyplot as plt
 import sys
 
@@ -409,76 +405,6 @@ def penalty_boundary_old(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim, num_dd
                 mat_jump_bnd[num_global_ddl[0]:num_global_ddl[-1]+1,dof_vert[0]:dof_vert[-1]+1] = -np.sqrt(coeff_pen)*np.eye(d_) / d_ #-diagg / d_ #-np.eye(d_) / d_
 
     return (mat_jump_bnd.T * mat_jump_bnd).tocsr()
-
-def smallest_convexe_bary_coord_bis(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d_): #pos_vert contient les positions des barycentres sur les faces au bord
-    toutes_pos_ddl = [] #ordre : d'abord tous les ddl de cellules puis tous ceux des vertex au bord
-    for i in pos_bary_cells.values():
-        if dim_ == 2:
-            toutes_pos_ddl.append(i)
-        elif dim_ == 3:
-            toutes_pos_ddl.append(i)
-    for i in pos_vert.values():
-        toutes_pos_ddl.append(i)
-    toutes_pos_ddl = np.array(toutes_pos_ddl)
-    #calcul des voisinages par arbre
-    tree = KDTree(toutes_pos_ddl)
-    #num de tous les ddl
-    tous_num_ddl = np.arange(len(toutes_pos_ddl) * d_)
-    #calcul du convexe associé à chaque face
-    res_num = dict([])
-    res_pos = dict([])
-    res_coord = dict([])
-    for i,j in face_n_num.items():
-        #print(i
-        if len(j) > 1: #cad face pas au bord
-            aux_num = []
-            aux_pos = []
-            x = pos_bary_facets.get(i) #position du barycentre de la face
-            if dim_ == 2:
-                nb_voisins = 10
-            elif dim_ == 3:
-                nb_voisins = 25 #20 avant de faire la torsion avec maillage fin...
-            distance,pos_voisins = tree.query(x, nb_voisins)
-            
-            #adding points to compute the convex hull
-            data_convex_hull = [x]
-            for k in range(nb_voisins):
-                data_convex_hull.append(tree.data[pos_voisins[k]])
-
-            #computing the convex with the points in the list
-            convexe = ConvexHull(data_convex_hull,qhull_options='Qc QJ Pp')
-            if 0 not in convexe.vertices: #cad qu'on a un convexe qui contient strictement x
-                #Faire une triangulation de Delaunay des points du tree
-                list_points = convexe.points
-                delau = Delaunay(list_points[1:]) #on retire le barycentre de la face de ces données. On ne le veut pas dans le Delaunay
-                #Ensuite, utiliser le transform sur le Delaunay pour avoir les coords bary du bay de la face. Il reste seulement à trouver dans quel tétra est-ce que toutes les coords sont toutes positives !
-                trans = delau.transform
-                num_simplex = delau.find_simplex(x)
-                #print(num_simplex
-                coord_bary = delau.transform[num_simplex,:dim_].dot(x - delau.transform[num_simplex,dim_])
-                coord_bary = np.append(coord_bary, 1. - coord_bary.sum())
-
-                res_coord[i] = coord_bary
-                for k in delau.simplices[num_simplex]:
-                    num = pos_voisins[k] #not k-1 because the barycentre of the face x has been removed from the Delaunay triangulation
-                    #print(num
-                    if d_ == 1:
-                        aux_num.append([num]) #numéro dans vecteur ccG
-                    elif d_ == 2:
-                        aux_num.append([num * d_, num * d_ + 1])
-                    elif d_ == 3:
-                        aux_num.append([num * d_, num * d_ + 1, num * d_ + 2])
-
-                #On associe le tetra à la face 
-                res_num[i] = aux_num
-                res_pos[i] = aux_pos
-            
-            else:
-                print('Not possible to find a convex containing the barycenter of the facet.\n')
-                print('Ending computation !')
-                sys.exit()
-                                
-    return res_num,res_coord
 
 def local_project(v, V, u=None):
     dv = TrialFunction(V)
