@@ -69,10 +69,11 @@ def DEM_to_DG_1_matrix(mesh_, nb_ddl_ccG_, d_, dim_, passage_ccG_CR):
 
 def gradient_matrix(mesh_, d_):
     """Creates a matrix computing the cell-wise gradient from the facet values stored in a Crouzeix-raviart FE vector."""
+    dim = mesh_.geometric_dimension()
     if d_ == 1:
         W = VectorFunctionSpace(mesh_, 'DG', 0)
         U_CR = FunctionSpace(mesh_, 'CR', 1)
-    elif d_ >= 2:
+    elif d_ == dim:
         W = TensorFunctionSpace(mesh_, 'DG', 0)
         U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
 

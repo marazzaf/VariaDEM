@@ -107,24 +107,6 @@ def barycentric_coord_2d(points, x): #On évalue dans tetra de points les coordo
         assert(np.abs(np.sum(res) - 1.0) < 1.e-14) #valeur ici bien choisie ? Prendre valeur relativ
         return res
 
-def dico_position_bary_face(mesh_, d_):
-    """Creates a dictionary whose keys are the index of the facets of the mesh and the values the positions of the barycentre of the facets.""" 
-    dim = mesh_.geometric_dimension()
-    if dim == d_:
-        U_CR = VectorFunctionSpace(mesh_, 'CR', 1) #vectorial case
-    elif dim == 1:
-        U_CR = FunctionSpace(mesh_, 'CR', 1) #scalar case
-    elt = U_CR.element()
-        
-    result = dict([])
-    for cell in cells(mesh_):
-        local_num_facet = -1
-        for f in facets(cell):
-            local_num_facet += 1
-            pos_dof_cell = elt.tabulate_dof_coordinates(cell)
-            result[f.index()] = pos_dof_cell[local_num_facet]
-    return result
-
 def smallest_convexe_bary_coord(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim,d_,h_,h_min,Tetra=True): #pos_vert contient les positions des barycentres sur les faces au bord
     stencil = 0. #distance max utilisée pour reconstruire une valeur
     toutes_pos_ddl = [] #ordre : d'abord tous les ddl de cellules puis tous ceux des vertex au bord
@@ -271,54 +253,6 @@ def convexe_generalised_bary_coord(face_n_num,face_nn_num,face_nn_pos,pos_bary_f
                 #res_coord[g] = generalised_barycentric_coord_3d(convexe_pos, pos_bary_facets[g])
                 res_coord[g] = iter_coord_bary_3d(convexe_pos, pos_bary_facets[g],h_)
     return res_num,res_pos, res_coord
-
-#Dictionnaire avec numéro de la face donne sa position dans le vecteur ccG !
-def dic_position_facets_bord(mesh_, facet_n_num,nb_cellules, d_):
-    resultat = dict([])
-    compteur = nb_cellules-1
-    for num_face,voisins in facet_n_num.items():
-        if len(voisins) == 1: #Face sur le bord car n'a qu'un voisin
-            if d_ == 2:
-                resultat[num_face] = [compteur+1, compteur+2]
-                compteur += 2
-            elif d_ == 3:
-                resultat[num_face] = [compteur+1, compteur+2, compteur+3]
-                compteur += 3
-            elif d_ == 1:
-                resultat[num_face] = [compteur+1]
-                compteur += 1
-    return resultat
-
-def dico_position_vertex_bord(mesh_, face_num, nb_ddl_cellules, d_, dim):
-    vertex_associe_face = dict([])
-    pos_ddl_vertex = dict([])
-    num_ddl_vertex_ccG = dict([])
-    compteur = nb_ddl_cellules-1 #-1 ? #va être à la fin le nbr de dof ccG
-    for f in facets(mesh_):
-            if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
-                vertex_associe_face[f.index()] = []
-    for v in vertices(mesh_):
-        test_bord = False #pour voir si vertex est sur le bord
-        for f in facets(v):
-            if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
-                vertex_associe_face[f.index()] = vertex_associe_face[f.index()] + [v.index()]
-                test_bord = True
-        if test_bord: #vertex est bien sur le bord. Donc devient un ddl de ccG
-            if d_ == 2: #pour num du vertex dans vec ccG
-                num_ddl_vertex_ccG[v.index()] = [compteur+1, compteur+2]
-                compteur += 2
-            elif d_ == 3:
-                num_ddl_vertex_ccG[v.index()] = [compteur+1, compteur+2, compteur+3]
-                compteur += 3
-            elif d_ == 1:
-                num_ddl_vertex_ccG[v.index()] = [compteur+1]
-                compteur += 1
-            if dim == 2: #pour position du vertex dans l'espace
-                pos_ddl_vertex[v.index()] = np.array([v.x(0),v.x(1)])
-            elif dim == 3:
-                pos_ddl_vertex[v.index()] = np.array([v.x(0),v.x(1),v.x(2)])
-
-    return vertex_associe_face,pos_ddl_vertex,num_ddl_vertex_ccG
 
 def mass_vertex_dofs(mesh_, nb_ddl_ccG_, pos_ddl_vertex, num_ddl_vertex_ccG, d_, dim, rho_):
     res = np.zeros(nb_ddl_ccG_)
