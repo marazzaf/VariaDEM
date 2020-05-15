@@ -18,9 +18,9 @@ print('nb dof DEM: %i' % nb_dof_DEM)
 
 #Testing P1 consistency and that's all
 x = SpatialCoordinate(mesh)
-#u = DEM_interpolation(x, mesh, d, DEM_to_CG, DEM_to_DG)
+u = DEM_interpolation(x, mesh, d, DEM_to_CG, DEM_to_DG)
 #u = DEM_interpolation(x[0]+x[1], mesh, d, DEM_to_CG, DEM_to_DG)
-u = DEM_interpolation(as_vector((0.,x[0]+x[1])), mesh, d, DEM_to_CG, DEM_to_DG)
+#u = DEM_interpolation(as_vector((x[0]+x[1],0.)), mesh, d, DEM_to_CG, DEM_to_DG)
 print(max(u))
 print(min(u))
 
