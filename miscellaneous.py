@@ -87,6 +87,7 @@ def local_project(v, V, u=None):
         return
 
 def penalty_FV(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim_, mat_grad_, dico_pos_bary_facet, passage_ccG_CR_):
+    """Creates the penalty matrix to stabilize the DEM."""
     if d_ >= 2:
         U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
         U_DG = VectorFunctionSpace(mesh_, 'DG', 0)
@@ -191,3 +192,15 @@ def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim_, num_ddl_v
 
     mat_jump_bnd = mat_jump_1 + mat_jump_2 * mat_grad_ * passage_ccG_CR_
     return (mat_jump_bnd.T * mat_jump_bnd).tocsr()
+
+def DEM_interpolation(func, mesh_, d_, DEM_to_CG_, DEM_to_DG_):
+    """Interpolates a function or expression to return a DEM vector containg the interpolation."""
+    dim = mesh_.geometric_dimension()
+    if d_ == dim:
+        U_DG = VectorFunctionSpace(mesh_, 'DG', 0)
+        U_CG = VectorFunctionSpace(mesh_, 'CG', 1)
+    elif d_ == 1:
+        U_DG = FunctionSpace(mesh_, 'DG', 0)
+        U_CG = FunctionSpace(mesh_, 'CG', 1)
+
+    return DEM_to_DG_.T * local_project(func, U_DG).vector().get_local() + DEM_to_CG_.T * local_project(func, U_CG).vector().get_local()
