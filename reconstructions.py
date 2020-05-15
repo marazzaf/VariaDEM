@@ -11,8 +11,9 @@ def DEM_to_DG_matrix(nb_dof_cells_,nb_dof_ccG_):
     """Creates a csr companion matrix to get the cells values of a DEM vector."""
     return sp.eye(nb_dof_cells_, n = nb_dof_ccG_, format='csr')
 
-def DEM_to_CG_matrix(mesh_, nb_ddl_ccG_,num_vert_ccG,d_,dim):
+def DEM_to_CG_matrix(mesh_, nb_ddl_ccG_,num_vert_ccG,d_):
     """Creates a csr companion matrix to get the boundary vertex values of a DEM vector."""
+    dim = mesh_.geometric_dimension()
     if d_ == 1:
         U_CG = FunctionSpace(mesh_,'CG', 1)
     elif d_ == dim:
@@ -31,7 +32,8 @@ def DEM_to_CG_matrix(mesh_, nb_ddl_ccG_,num_vert_ccG,d_,dim):
 
     return matrice_resultat.tocsr()
 
-def DEM_to_DG_1_matrix(mesh_, nb_ddl_ccG_, d_, dim_, passage_ccG_CR):
+def DEM_to_DG_1_matrix(mesh_, nb_ddl_ccG_, d_, passage_ccG_CR):
+    dim = mesh_.geometric_dimension()
     mat_grad = gradient_matrix(mesh_,d_)
     if d_ == 1:
         EDG_0 = FunctionSpace(mesh_, 'DG', 0)
@@ -66,7 +68,7 @@ def DEM_to_DG_1_matrix(mesh_, nb_ddl_ccG_, d_, dim_, passage_ccG_CR):
         tens_dof_position = dofmap_tens_DG_0.cell_dofs(index_cell)
         for dof,pos in zip(dof_position,pos_dof_DG_1): #loop on quadrature points
             diff = pos - position_barycentre
-            for i in range(dim_):
+            for i in range(dim):
                 matrice_resultat_2[dof, tens_dof_position[(dof % d_)*d_ + i]] = diff[i]
         
     return matrice_resultat_1 +  matrice_resultat_2 * mat_grad * passage_ccG_CR
@@ -162,7 +164,7 @@ def facet_interpolation(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,
                                 
     return res_num,res_coord
 
-def matrice_passage_ccG_CR(mesh_, nb_ddl_ccG, facet_num, vertex_associe_face, num_ddl_vertex, d_, pos_ddl_vertex):
+def DEM_to_CR_matrix(mesh_, nb_ddl_ccG, facet_num, vertex_associe_face, num_ddl_vertex, d_, pos_ddl_vertex):
     dim = mesh_.geometric_dimension()
     if d_ == 1:
         ECR = FunctionSpace(mesh_, 'CR', 1)
@@ -227,3 +229,26 @@ def matrice_passage_ccG_CR(mesh_, nb_ddl_ccG, facet_num, vertex_associe_face, nu
         #    assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[2],:]) - 1.) < 1.e-10)
         
     return matrice_resultat.tocsr()
+
+def compute_all_reconstruction_matrices(mesh_, d_):
+    """Computes all the required reconstruction matrices."""
+    
+    dim = mesh_.geometric_dimension()
+    if d_ == 1:
+        U_DG = FunctionSpace(mesh_, 'DG', 0)
+    elif d_ == dim:
+        U_DG = VectorFunctionSpace(mesh_, 'DG', 0)
+
+    nb_cell_dofs = U_DG.dofmap().global_dimension()
+
+    #mesh related quantities
+    facet_num = facet_neighborhood(mesh_)
+    vertex_associe_face,pos_ddl_vertex,num_ddl_vertex_ccG,nb_dof_DEM = dico_position_vertex_bord(mesh_, facet_num, d_)
+
+    #calling functions to construct the matrices
+    DEM_to_DG = DEM_to_DG_matrix(nb_cell_dofs,nb_dof_DEM)
+    DEM_to_CG = DEM_to_CG_matrix(mesh_, nb_dof_DEM, num_ddl_vertex_ccG, d_)
+    DEM_to_CR = DEM_to_CR_matrix(mesh_, nb_dof_DEM, facet_num, vertex_associe_face, num_ddl_vertex_ccG, d_, pos_ddl_vertex)
+    DEM_to_DG_1 = DEM_to_DG_1_matrix(mesh_, nb_dof_DEM, d_, DEM_to_CR)
+
+    return DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM

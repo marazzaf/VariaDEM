@@ -47,7 +47,7 @@ def dico_position_bary_face(mesh_, d_):
             result[f.index()] = pos_dof_cell[local_num_facet]
     return result
 
-def dico_position_vertex_bord(mesh_, face_num, d_, dim):
+def dico_position_vertex_bord(mesh_, face_num, d_):
     """truc"""
     dim = mesh_.geometric_dimension()
     if d_ == dim:
