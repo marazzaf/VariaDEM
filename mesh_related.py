@@ -32,9 +32,9 @@ def position_cell_dofs(mesh_,d_):
 def dico_position_bary_face(mesh_, d_):
     """Creates a dictionary whose keys are the index of the facets of the mesh and the values the positions of the barycentre of the facets.""" 
     dim = mesh_.geometric_dimension()
-    if dim == d_:
+    if d_ == dim:
         U_CR = VectorFunctionSpace(mesh_, 'CR', 1) #vectorial case
-    elif dim == 1:
+    elif d_ == 1:
         U_CR = FunctionSpace(mesh_, 'CR', 1) #scalar case
     elt = U_CR.element()
         
@@ -61,8 +61,8 @@ def dico_position_vertex_bord(mesh_, face_num, d_):
     num_ddl_vertex_ccG = dict([])
     compteur = nb_cell_dofs - 1 #va être à la fin le nbr de dof ccG
     for f in facets(mesh_):
-            if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
-                vertex_associe_face[f.index()] = []
+        if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
+            vertex_associe_face[f.index()] = []
     for v in vertices(mesh_):
         test_bord = False #pour voir si vertex est sur le bord
         for f in facets(v):

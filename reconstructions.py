@@ -93,8 +93,9 @@ def gradient_matrix(mesh_, d_):
     row,col,val = as_backend_type(A).mat().getValuesCSR()
     return sp.csr_matrix((val, col, row))
 
-def facet_interpolation(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d_): #pos_vert contient les positions des barycentres sur les faces au bord
+def facet_interpolation(facet_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d_, I=10):
     """Computes the reconstruction in the facets of the meh from the dofs of the DEM."""
+    
     toutes_pos_ddl = [] #ordre : d'abord tous les ddl de cellules puis tous ceux des vertex au bord
     for i in pos_bary_cells.values():
         if dim_ == 2:
@@ -108,25 +109,27 @@ def facet_interpolation(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,
     tree = KDTree(toutes_pos_ddl)
     #num de tous les ddl
     tous_num_ddl = arange(len(toutes_pos_ddl) * d_)
+
+    #Fixing limits to the number of dofs used in the search for an interpolating simplex
+    if dim_ == 3 and I < 25:
+        I = 25 #comes from experience as default but can be changed
+    if dim_ == 2 and I < 10:
+        I = 10 #idem
+    
     #calcul du convexe associé à chaque face
     res_num = dict([])
     res_pos = dict([])
     res_coord = dict([])
-    for i,j in face_n_num.items():
-        #print(i
-        if len(j) > 1: #cad face pas au bord
+    for f,neigh in facet_num.items():
+        if len(neigh) > 1: #Inner facet
             aux_num = []
             aux_pos = []
-            x = pos_bary_facets.get(i) #position du barycentre de la face
-            if dim_ == 2:
-                nb_voisins = 10
-            elif dim_ == 3:
-                nb_voisins = 25 #20 avant de faire la torsion avec maillage fin...
-            distance,pos_voisins = tree.query(x, nb_voisins)
+            x = pos_bary_facets.get(f) #position du barycentre de la face
+            distance,pos_voisins = tree.query(x, I)
             
             #adding points to compute the convex hull
             data_convex_hull = [x]
-            for k in range(nb_voisins):
+            for k in range(I):
                 data_convex_hull.append(tree.data[pos_voisins[k]])
 
             #computing the convex with the points in the list
@@ -138,14 +141,12 @@ def facet_interpolation(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,
                 #Ensuite, utiliser le transform sur le Delaunay pour avoir les coords bary du bay de la face. Il reste seulement à trouver dans quel tétra est-ce que toutes les coords sont toutes positives !
                 trans = delau.transform
                 num_simplex = delau.find_simplex(x)
-                #print(num_simplex
                 coord_bary = delau.transform[num_simplex,:dim_].dot(x - delau.transform[num_simplex,dim_])
                 coord_bary = append(coord_bary, 1. - coord_bary.sum())
 
-                res_coord[i] = coord_bary
+                res_coord[f] = coord_bary
                 for k in delau.simplices[num_simplex]:
                     num = pos_voisins[k] #not k-1 because the barycentre of the face x has been removed from the Delaunay triangulation
-                    #print(num
                     if d_ == 1:
                         aux_num.append([num]) #numéro dans vecteur ccG
                     elif d_ == 2:
@@ -154,8 +155,8 @@ def facet_interpolation(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,
                         aux_num.append([num * d_, num * d_ + 1, num * d_ + 2])
 
                 #On associe le tetra à la face 
-                res_num[i] = aux_num
-                res_pos[i] = aux_pos
+                res_num[f] = aux_num
+                res_pos[f] = aux_pos
             
             else:
                 print('Not possible to find a convex containing the barycenter of the facet.\n')
@@ -221,12 +222,6 @@ def DEM_to_CR_matrix(mesh_, nb_ddl_ccG, facet_num, vertex_associe_face, num_ddl_
                     matrice_resultat[num_global_ddl[2], v1[2]] = 1./3.
                     matrice_resultat[num_global_ddl[2], v2[2]] = 1./3.
                     matrice_resultat[num_global_ddl[2], v3[2]] = 1./3.
-                
-        assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[0],:]) - 1.) < 1.e-10)
-        if d_ == 2:
-            assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[1],:]) - 1.) < 1.e-10)
-        #if d_ == 3:
-        #    assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[2],:]) - 1.) < 1.e-10)
         
     return matrice_resultat.tocsr()
 
