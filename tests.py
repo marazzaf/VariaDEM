@@ -18,14 +18,12 @@ U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
 #DEM reconstruction
 nb_dof_cells = U_DG.dofmap().global_dimension()
 facet_num = facet_neighborhood(mesh)
-dico_pos_bary_faces = dico_position_bary_face(mesh,d)
-pos_bary_cells = position_cell_dofs(mesh,d)
 vertex_associe_face,pos_ddl_vertex,num_ddl_vertex_ccG,nb_dof_ccG = dico_position_vertex_bord(mesh, facet_num, d, dim)
 print('nb dof ccG : %i' % nb_dof_ccG)
 
-convexe_num,convexe_coord = smallest_convexe_bary_coord_bis(facet_num,pos_bary_cells,pos_ddl_vertex,dico_pos_bary_faces,dim,d)
+#convexe_num,convexe_coord = facet_interpolation(facet_num,pos_bary_cells,pos_ddl_vertex,dico_pos_bary_faces,dim,d)
 print('Convexe ok !')
-passage_ccG_to_CR = matrice_passage_ccG_CR(mesh, nb_dof_ccG, convexe_num, convexe_coord, vertex_associe_face, num_ddl_vertex_ccG, d, dim)
+passage_ccG_to_CR = matrice_passage_ccG_CR(mesh, nb_dof_ccG, facet_num, vertex_associe_face, num_ddl_vertex_ccG, d, pos_ddl_vertex)
 passage_ccG_to_CG = DEM_to_CG_matrix(mesh, nb_dof_ccG,num_ddl_vertex_ccG,d,dim)
 passage_ccG_to_DG = DEM_to_DG_matrix(nb_dof_cells,nb_dof_ccG)
 print('matrices passage ok !')

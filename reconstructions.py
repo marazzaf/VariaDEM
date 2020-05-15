@@ -4,6 +4,8 @@ from dolfin import *
 from numpy import array,arange,append
 from scipy.spatial import ConvexHull, Delaunay, KDTree
 from scipy.spatial.qhull import QhullError
+import sys
+from mesh_related import *
 
 def DEM_to_DG_matrix(nb_dof_cells_,nb_dof_ccG_):
     """Creates a csr companion matrix to get the cells values of a DEM vector."""
@@ -89,7 +91,8 @@ def gradient_matrix(mesh_, d_):
     row,col,val = as_backend_type(A).mat().getValuesCSR()
     return sp.csr_matrix((val, col, row))
 
-def smallest_convexe_bary_coord_bis(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d_): #pos_vert contient les positions des barycentres sur les faces au bord
+def facet_interpolation(face_n_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d_): #pos_vert contient les positions des barycentres sur les faces au bord
+    """Computes the reconstruction in the facets of the meh from the dofs of the DEM."""
     toutes_pos_ddl = [] #ordre : d'abord tous les ddl de cellules puis tous ceux des vertex au bord
     for i in pos_bary_cells.values():
         if dim_ == 2:
@@ -159,21 +162,31 @@ def smallest_convexe_bary_coord_bis(face_n_num,pos_bary_cells,pos_vert,pos_bary_
                                 
     return res_num,res_coord
 
-def matrice_passage_ccG_CR(mesh_, nb_ddl_ccG, conv_num, conv_coord, vertex_associe_face, num_ddl_vertex, d_, dim):
+def matrice_passage_ccG_CR(mesh_, nb_ddl_ccG, facet_num, vertex_associe_face, num_ddl_vertex, d_, pos_ddl_vertex):
+    dim = mesh_.geometric_dimension()
     if d_ == 1:
         ECR = FunctionSpace(mesh_, 'CR', 1)
         EDG = FunctionSpace(mesh_, 'DG', 0)
-    else:
+    elif d_ == dim:
         ECR = VectorFunctionSpace(mesh_, 'CR', 1)
         EDG = VectorFunctionSpace(mesh_, 'DG', 0)
     dofmap_CR = ECR.dofmap()
-    nb_total_dof_CR = len(dofmap_CR.dofs())
+    nb_total_dof_CR = dofmap_CR.global_dimension()
+
+    #computing the useful mesh quantities
+    pos_bary_cells = position_cell_dofs(mesh_,d_)
+    dico_pos_bary_faces = dico_position_bary_face(mesh_,d_)
+    
+    #Computing the facet reconstructions
+    convex_num,convex_coord = facet_interpolation(facet_num,pos_bary_cells,pos_ddl_vertex,dico_pos_bary_faces,dim,d_)
+
+    #Storing the facet reconstructions in a matrix
     matrice_resultat = sp.dok_matrix((nb_total_dof_CR,nb_ddl_ccG)) #Matrice vide.
     for f in facets(mesh_):
         num_global_face = f.index()
         num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim - 1, array([num_global_face], dtype="uintp"))
-        convexe_f = conv_num.get(num_global_face)
-        convexe_c = conv_coord.get(num_global_face)
+        convexe_f = convex_num.get(num_global_face)
+        convexe_c = convex_coord.get(num_global_face)
 
         if convexe_f != None: #Face interne, on interpolle la valeur !
             for i,j in zip(convexe_f,convexe_c):
@@ -207,9 +220,9 @@ def matrice_passage_ccG_CR(mesh_, nb_ddl_ccG, conv_num, conv_coord, vertex_assoc
                     matrice_resultat[num_global_ddl[2], v2[2]] = 1./3.
                     matrice_resultat[num_global_ddl[2], v3[2]] = 1./3.
                 
-        #assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[0],:]) - 1.) < 1.e-10)
-        #if d_ == 2:
-        #    assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[1],:]) - 1.) < 1.e-10)
+        assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[0],:]) - 1.) < 1.e-10)
+        if d_ == 2:
+            assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[1],:]) - 1.) < 1.e-10)
         #if d_ == 3:
         #    assert(abs(sp.lil_matrix.sum(matrice_resultat[num_global_ddl[2],:]) - 1.) < 1.e-10)
         
