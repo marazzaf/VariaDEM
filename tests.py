@@ -6,7 +6,7 @@ from mesh_related import *
 print(facet_neighborhood.__doc__)
 
 L = 0.5
-nb_elt = 10
+nb_elt = 3
 mesh = RectangleMesh(Point(-L,-L),Point(L,L),nb_elt,nb_elt,"crossed")
 #mesh = mesh = BoxMesh(Point(0., 0., 0.), Point(L, L, L), nb_elt, nb_elt, nb_elt)
 dim = mesh.geometric_dimension()
@@ -19,7 +19,8 @@ print('nb dof DEM: %i' % nb_dof_DEM)
 #Testing P1 consistency and that's all
 x = SpatialCoordinate(mesh)
 #u = DEM_interpolation(x, mesh, d, DEM_to_CG, DEM_to_DG)
-u = DEM_interpolation(sqrt(x[0]*x[0]+x[1]*x[1]), mesh, d, DEM_to_CG, DEM_to_DG)
+#u = DEM_interpolation(sqrt(x[0]*x[0]+x[1]*x[1]), mesh, d, DEM_to_CG, DEM_to_DG)
+u = DEM_interpolation(x[0]+x[1], mesh, d, DEM_to_CG, DEM_to_DG)
 print(max(u))
 print(min(u))
 
