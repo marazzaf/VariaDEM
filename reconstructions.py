@@ -133,10 +133,10 @@ def facet_interpolation(facet_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d
                 data_convex_hull.append(tree.data[pos_voisins[k]])
 
             #computing the convex with the points in the list
-            convexe = ConvexHull(data_convex_hull,qhull_options='Qc QJ Pp')
-            if 0 not in convexe.vertices: #cad qu'on a un convexe qui contient strictement x
+            convex = ConvexHull(data_convex_hull,qhull_options='Qc QJ Pp')
+            if 0 not in convex.vertices: #convex strictly contains the facet barycentre
                 #Faire une triangulation de Delaunay des points du tree
-                list_points = convexe.points
+                list_points = convex.points
                 delau = Delaunay(list_points[1:]) #on retire le barycentre de la face de ces données. On ne le veut pas dans le Delaunay
                 #Ensuite, utiliser le transform sur le Delaunay pour avoir les coords bary du bay de la face. Il reste seulement à trouver dans quel tétra est-ce que toutes les coords sont toutes positives !
                 trans = delau.transform
