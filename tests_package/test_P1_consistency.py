@@ -1,9 +1,9 @@
 # coding: utf-8
+import sys
+sys.path.append('../package/')
 from miscellaneous import *
 from reconstructions import *
 from mesh_related import *
-
-print(facet_neighborhood.__doc__)
 
 L = 0.5
 nb_elt = 3
@@ -32,38 +32,23 @@ U_CG = VectorFunctionSpace(mesh, 'CG', 1) #Pour bc
 W = TensorFunctionSpace(mesh, 'DG', 0)
 
 #CR interpolation
-#U_CR = FunctionSpace(mesh, 'CR', 1)
-#W = VectorFunctionSpace(mesh, 'DG', 0)
 test_CR = Function(U_CR)
 reco_CR = DEM_to_CR * u
 test_CR.vector().set_local(reco_CR)
 print(min(reco_CR))
 print(max(reco_CR))
 
-#print(test_CR((0,L)))
-#print(test_CR((0,-L)))
-#print(test_CR((L,0)))
-#print(test_CR((-L,0)))
-#print('Problem:')
-#print(test_CR((L,L)))
-#print(test_CR((-L,L)))
-#print('MTF!')
-#print(test_CR((-L,-L)))
-#print(test_CR((L,-L))) 
-
 #Outputfile
 file = File('test.pvd')
 file.write(test_CR)
 file.write(local_project(grad(test_CR), W))
 
-#test_DG_1 = Function(U_DG_1)
-#test_DG_1.vector().set_local(passage_ccG_to_DG_1 * u)
-#print(min(u))
-#print(min(test_DG_1.vector().get_local()))
-#print(max(u))
-#print(max(test_DG_1.vector().get_local()))
-#file.write(test_DG_1)
-#file.write(local_project(grad(test_DG_1), W))
+test_DG_1 = Function(U_DG_1)
+test_DG_1.vector().set_local(DEM_to_DG_1 * u)
+print(min(test_DG_1.vector().get_local()))
+print(max(test_DG_1.vector().get_local()))
+file.write(test_DG_1)
+file.write(local_project(grad(test_DG_1), W))
 
 
 
