@@ -3,7 +3,6 @@ import scipy.sparse as sp
 from dolfin import *
 from numpy import array,arange,append
 from scipy.spatial import ConvexHull, Delaunay, KDTree
-from scipy.spatial.qhull import QhullError
 from DEM.mesh_related import *
 from DEM.errors import *
 

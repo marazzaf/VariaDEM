@@ -3,6 +3,9 @@ import sys
 sys.path.append('../')
 from DEM import *
 
+#import pytest #for unit tests
+eps = 1e-15 #constant to compare floats. Possible to find a Python constant with that value ?
+
 L = 0.5
 nb_elt = 3
 mesh = RectangleMesh(Point(-L,-L),Point(L,L),nb_elt,nb_elt,"crossed")
@@ -17,10 +20,8 @@ DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM = compute_all_reconstru
 #Testing P1 consistency and that's all
 x = SpatialCoordinate(mesh)
 u = DEM_interpolation(x, mesh, d, DEM_to_CG, DEM_to_DG)
-#u = DEM_interpolation(x[0]+x[1], mesh, d, DEM_to_CG, DEM_to_DG)
-#u = DEM_interpolation(as_vector((x[0]+x[1],0.)), mesh, d, DEM_to_CG, DEM_to_DG)
-print(max(u))
-print(min(u))
+assert abs(max(u) - L) < eps
+assert abs(min(u) + L) < eps
 #Ajouter des test unitaires là-dessus.
 
 #Functional Spaces
