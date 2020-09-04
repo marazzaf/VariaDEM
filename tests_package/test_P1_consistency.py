@@ -1,9 +1,7 @@
 # coding: utf-8
 import sys
-sys.path.append('../package/')
-from miscellaneous import *
-from reconstructions import *
-from mesh_related import *
+sys.path.append('../')
+from DEM import *
 
 L = 0.5
 nb_elt = 3
@@ -14,7 +12,7 @@ d = dim #scalar problem #dim #vectorial problem
 
 #DEM reconstruction
 DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM = compute_all_reconstruction_matrices(mesh, d)
-print('nb dof DEM: %i' % nb_dof_DEM)
+#print('nb dof DEM: %i' % nb_dof_DEM)
 
 #Testing P1 consistency and that's all
 x = SpatialCoordinate(mesh)
@@ -23,6 +21,7 @@ u = DEM_interpolation(x, mesh, d, DEM_to_CG, DEM_to_DG)
 #u = DEM_interpolation(as_vector((x[0]+x[1],0.)), mesh, d, DEM_to_CG, DEM_to_DG)
 print(max(u))
 print(min(u))
+#Ajouter des test unitaires là-dessus.
 
 #Functional Spaces
 U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
@@ -37,9 +36,10 @@ reco_CR = DEM_to_CR * u
 test_CR.vector().set_local(reco_CR)
 print(min(reco_CR))
 print(max(reco_CR))
+#Ajouter des test unitaires là-dessus.
 
 #Outputfile
-file = File('test.pvd')
+file = File('P1_consistency.pvd')
 file.write(test_CR)
 file.write(local_project(grad(test_CR), W))
 

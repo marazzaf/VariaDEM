@@ -1,5 +1,5 @@
 # coding: utf-8
-from fenics import *
+from dolfin import *
 import numpy as np
 from numpy.linalg import norm
 from scipy.sparse import dok_matrix

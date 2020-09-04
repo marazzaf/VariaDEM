@@ -1,5 +1,5 @@
 # coding: utf-8
-from fenics import *
+from dolfin import *
 from numpy import array
 
 def facet_neighborhood(mesh_):
