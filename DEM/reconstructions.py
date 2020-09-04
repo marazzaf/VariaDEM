@@ -4,26 +4,26 @@ from dolfin import *
 from numpy import array,arange,append
 from scipy.spatial import ConvexHull, Delaunay, KDTree
 from scipy.spatial.qhull import QhullError
-import sys
 from DEM.mesh_related import *
+from DEM.errors import *
 
 def DEM_to_DG_matrix(nb_dof_cells_,nb_dof_ccG_):
     """Creates a csr companion matrix to get the cells values of a DEM vector."""
     return sp.eye(nb_dof_cells_, n = nb_dof_ccG_, format='csr')
 
-def DEM_to_CG_matrix(mesh_, nb_ddl_ccG_,num_vert_ccG,d_):
+def DEM_to_CG_matrix(mesh_, nb_dof_ccG_,num_vert_ccG,d_):
     """Creates a csr companion matrix to get the boundary vertex values of a DEM vector."""
     dim = mesh_.geometric_dimension()
     if d_ == 1:
         U_CG = FunctionSpace(mesh_,'CG', 1)
     elif d_ == dim:
         U_CG = VectorFunctionSpace(mesh_,'CG', 1)
-    nb_ddl_CG = U_CG.dofmap().global_dimension()
-    matrice_resultat = sp.dok_matrix((nb_ddl_CG,nb_ddl_ccG_)) #Matrice vide.
+    nb_dof_CG = U_CG.dofmap().global_dimension()
+    matrice_resultat = sp.dok_matrix((nb_dof_CG,nb_dof_ccG_)) #Matrice vide.
     vert_to_dof = vertex_to_dof_map(U_CG)
 
     #mettre des 1 à la bonne place dans la matrice...
-    for (i,j),k in zip(num_vert_ccG.items(),range(nb_ddl_ccG_)): #On boucle sur le numéro des vertex
+    for (i,j),k in zip(num_vert_ccG.items(),range(nb_dof_ccG_)): #On boucle sur le numéro des vertex
         matrice_resultat[vert_to_dof[i*d_], j[0]] = 1.
         if d_ >= 2:
             matrice_resultat[vert_to_dof[i*d_]+1, j[1]] = 1.
@@ -32,7 +32,7 @@ def DEM_to_CG_matrix(mesh_, nb_ddl_ccG_,num_vert_ccG,d_):
 
     return matrice_resultat.tocsr()
 
-def DEM_to_DG_1_matrix(mesh_, nb_ddl_ccG_, d_, passage_ccG_CR):
+def DEM_to_DG_1_matrix(mesh_, nb_dof_ccG_, d_, passage_ccG_CR):
     dim = mesh_.geometric_dimension()
     mat_grad = gradient_matrix(mesh_,d_)
     if d_ == 1:
@@ -49,9 +49,9 @@ def DEM_to_DG_1_matrix(mesh_, nb_ddl_ccG_, d_, passage_ccG_CR):
     elt_0 = EDG_0.element()
     elt_1 = EDG_1.element()
     nb_total_dof_DG_1 = len(dofmap_DG_1.dofs())
-    nb_ddl_grad = len(dofmap_tens_DG_0.dofs())
-    matrice_resultat_1 = sp.dok_matrix((nb_total_dof_DG_1,nb_ddl_ccG_)) #Empty matrix
-    matrice_resultat_2 = sp.dok_matrix((nb_total_dof_DG_1,nb_ddl_grad)) #Empty matrix
+    nb_dof_grad = len(dofmap_tens_DG_0.dofs())
+    matrice_resultat_1 = sp.dok_matrix((nb_total_dof_DG_1,nb_dof_ccG_)) #Empty matrix
+    matrice_resultat_2 = sp.dok_matrix((nb_total_dof_DG_1,nb_dof_grad)) #Empty matrix
     
     for c in cells(mesh_):
         index_cell = c.index()
@@ -159,14 +159,11 @@ def facet_interpolation(facet_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d
                 res_pos[f] = aux_pos
             
             else:
-                print('Not possible to find a convex containing the barycenter of the facet.\n')
-                print('Ending computation !')
-                sys.exit()
-                #créer une erreur plutôt non?
+                raise DEMError('Not possible to find a convex containing the barycenter of the facet.\n')
                                 
     return res_num,res_coord
 
-def DEM_to_CR_matrix(mesh_, nb_ddl_ccG, facet_num, vertex_associe_face, num_ddl_vertex, d_, pos_ddl_vertex):
+def DEM_to_CR_matrix(mesh_, nb_dof_ccG, facet_num, vertex_associe_face, num_ddl_vertex, d_, pos_ddl_vertex):
     dim = mesh_.geometric_dimension()
     if d_ == 1:
         ECR = FunctionSpace(mesh_, 'CR', 1)
@@ -185,7 +182,7 @@ def DEM_to_CR_matrix(mesh_, nb_ddl_ccG, facet_num, vertex_associe_face, num_ddl_
     convex_num,convex_coord = facet_interpolation(facet_num,pos_bary_cells,pos_ddl_vertex,dico_pos_bary_faces,dim,d_)
 
     #Storing the facet reconstructions in a matrix
-    matrice_resultat = sp.dok_matrix((nb_total_dof_CR,nb_ddl_ccG)) #Matrice vide.
+    matrice_resultat = sp.dok_matrix((nb_total_dof_CR,nb_dof_ccG)) #Matrice vide.
     for f in facets(mesh_):
         num_global_face = f.index()
         num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim - 1, array([num_global_face], dtype="uintp"))
