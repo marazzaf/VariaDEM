@@ -19,20 +19,17 @@ def test_reconstruction(mesh):
 
     #DEM reconstruction
     DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM = compute_all_reconstruction_matrices(mesh, d)
-    #print('nb dof DEM: %i' % nb_dof_DEM)
 
     #Testing P1 consistency and that's all
     x = SpatialCoordinate(mesh)
     u = DEM_interpolation(x, mesh, d, DEM_to_CG, DEM_to_DG)
     assert abs(max(u) - L) < eps
     assert abs(min(u) + L) < eps
-    #Ajouter des test unitaires là-dessus.
 
     #Functional Spaces
     U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
     U_DG_1 = VectorFunctionSpace(mesh, 'DG', 1)
     U_CR = VectorFunctionSpace(mesh, 'CR', 1) #Pour interpollation dans les faces
-    U_CG = VectorFunctionSpace(mesh, 'CG', 1) #Pour bc
     W = TensorFunctionSpace(mesh, 'DG', 0)
 
     #CR interpolation
@@ -50,7 +47,14 @@ def test_reconstruction(mesh):
     assert abs(min(gradient_vec[:,0,1])) < eps_2 and abs(max(gradient_vec[:,0,1])) < eps_2
     assert abs(min(gradient_vec[:,1,0])) < eps_2 and abs(max(gradient_vec[:,1,0])) < eps_2
     assert abs(min(gradient_vec[:,1,1]) - 1.) < eps_2 and abs(max(gradient_vec[:,1,1]) - 1.) < eps_2
-    #Ajouter cas pour 3d
+    #More tests for 3d functions
+    if d == 3:
+        assert abs(min(gradient_vec[:,0,2])) < eps_2 and abs(max(gradient_vec[:,0,2])) < eps_2
+        assert abs(min(gradient_vec[:,2,0])) < eps_2 and abs(max(gradient_vec[:,2,0])) < eps_2
+        assert abs(min(gradient_vec[:,1,2])) < eps_2 and abs(max(gradient_vec[:,1,2])) < eps_2
+        assert abs(min(gradient_vec[:,2,1])) < eps_2 and abs(max(gradient_vec[:,2,1])) < eps_2
+        assert abs(min(gradient_vec[:,2,2]) - 1.) < eps_2 and abs(max(gradient_vec[:,2,2]) - 1.) < eps_2
+        
 
     #Outputfile
     #file = File('P1_consistency.pvd')
@@ -71,23 +75,15 @@ def test_reconstruction(mesh):
     assert abs(min(gradient_vec[:,0,1])) < eps_2 and abs(max(gradient_vec[:,0,1])) < eps_2
     assert abs(min(gradient_vec[:,1,0])) < eps_2 and abs(max(gradient_vec[:,1,0])) < eps_2
     assert abs(min(gradient_vec[:,1,1]) - 1.) < eps_2 and abs(max(gradient_vec[:,1,1]) - 1.) < eps_2
-    #Ajouter cas pour 3d
+    #More tests for 3d functions
+    if d == 3:
+        assert abs(min(gradient_vec[:,0,2])) < eps_2 and abs(max(gradient_vec[:,0,2])) < eps_2
+        assert abs(min(gradient_vec[:,2,0])) < eps_2 and abs(max(gradient_vec[:,2,0])) < eps_2
+        assert abs(min(gradient_vec[:,1,2])) < eps_2 and abs(max(gradient_vec[:,1,2])) < eps_2
+        assert abs(min(gradient_vec[:,2,1])) < eps_2 and abs(max(gradient_vec[:,2,1])) < eps_2
+        assert abs(min(gradient_vec[:,2,2]) - 1.) < eps_2 and abs(max(gradient_vec[:,2,2]) - 1.) < eps_2
 
 
     #Outputfile
     #file.write(test_DG_1)
     #file.write(gradient_DG)
-
-
-##Testing reconstructions in both 2d and 3d
-#@pytest.fixture
-#def mesh_for_test(): #2d mesh
-#    #mesh = RectangleMesh(Point(-L,-L),Point(L,L),nb_elt,nb_elt,"crossed")
-#    #assert test_reconstruction(mesh) == 0
-#    return RectangleMesh(Point(-L,-L),Point(L,L),nb_elt,nb_elt,"crossed")
-#
-#@pytest.fixture
-#def mesh_for_test(): #3d mesh
-#    #mesh = BoxMesh(Point(-L, -L, -L), Point(L, L, L), nb_elt, nb_elt, nb_elt)
-#    #assert test_reconstruction(mesh) == 0
-#    return BoxMesh(Point(-L, -L, -L), Point(L, L, L), nb_elt, nb_elt, nb_elt)
