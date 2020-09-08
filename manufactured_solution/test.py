@@ -74,6 +74,8 @@ mat_pen = penalty_FV(penalty, nb_dof_DEM, mesh, face_num, d, dim, mat_grad, dico
 
 mat_pen_bnd = penalty_boundary(penalty, nb_dof_DEM, mesh, face_num, d, num_ddl_vertex_ccG, mat_grad, dico_pos_bary_faces, DEM_to_CR, pos_bary_cells)
 
+A = AA1 + mat_pen + A_pen_bis
+
 # Define variational problem
 u_CR = TrialFunction(U_CR)
 v_CR = TestFunction(U_CR)
@@ -83,31 +85,10 @@ v_CG = TestFunction(U_CG)
 u_DG_1 = TrialFunction(U_DG_1)
 v_DG_1 = TestFunction(U_DG_1)
 
-##cell-boundary
-#a3 =  penalty * hF / h * inner(u_CG, v_DG_1) * ds
-#A3 = assemble(a3)
-#row,col,val = as_backend_type(A3).mat().getValuesCSR()
-#A32 = sp.csr_matrix((val, col, row))
-#
-#a3 =  penalty * hF / h * inner(u_CG, v_CG) * ds
-#A3 = assemble(a3)
-#row,col,val = as_backend_type(A3).mat().getValuesCSR()
-#A33 = sp.csr_matrix((val, col, row))
-#
-#a3 = penalty * hF / h * inner(v_DG_1('+'), u_DG_1('+')) * ds
-#A3 = assemble(a3)
-#row,col,val = as_backend_type(A3).mat().getValuesCSR()
-#A34 = sp.csr_matrix((val, col, row))
-#A34.resize((A32.shape[0],A32.shape[0]))
-#
-#A_pen_bis = passage_ccG_to_CG.T * A33 * passage_ccG_to_CG -passage_ccG_to_CG.T * A32.T * passage_ccG_to_DG_1 - passage_ccG_to_DG_1.T * A32 * passage_ccG_to_CG + passage_ccG_to_DG_1.T * A34 * passage_ccG_to_DG_1
-
 #Imposition des conditions de Dirichlet Homogène
 a4 = inner(v_CG('+'),as_vector((1.,1.))) / hF * ds
 A4 = assemble(a4)
 A_BC = passage_ccG_to_CG.T * A4.get_local()
-
-A = AA1 + mat_pen + A_pen_bis
 
 #Prise en compte du chargement volumique à l'ancienne... Pour tester...
 L2 = F_ext(v_DG) #forme linéaire pour chargement volumique
