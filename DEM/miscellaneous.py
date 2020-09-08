@@ -139,7 +139,8 @@ def penalty_FV(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim_, mat_grad_, dico
     mat_jump = mat_jump_1 + mat_jump_2 * mat_grad_ * passage_ccG_CR_
     return (mat_jump.T * mat_jump).tocsr()
 
-def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim_, num_ddl_vertex_ccG, mat_grad_, dico_pos_bary_facet, passage_ccG_CR_, pos_bary_cells):
+def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, num_ddl_vertex_ccG, mat_grad_, dico_pos_bary_facet, passage_ccG_CR_, pos_bary_cells):
+    dim = mesh_.geometric_dimension()
     if d_ >= 2:
         U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
         tens_DG_0 = TensorFunctionSpace(mesh_, 'DG', 0)
@@ -167,7 +168,7 @@ def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim_, num_ddl_v
     for f in facets(mesh_):
         if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
             num_global_face = f.index()
-            num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim_ - 1, np.array([num_global_face], dtype="uintp"))
+            num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim - 1, np.array([num_global_face], dtype="uintp"))
             coeff_pen = mat[num_global_ddl][0]
             pos_bary_facet = dico_pos_bary_facet[f.index()] #position barycentre of facet
 
@@ -182,7 +183,7 @@ def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim_, num_ddl_v
             pen_diff = np.sqrt(coeff_pen)*diff
             tens_dof_position = dofmap_tens_DG_0.cell_dofs(num_cell)
             for num,dof_CR in enumerate(num_global_ddl):
-                for i in range(dim_):
+                for i in range(dim):
                     mat_jump_2[dof_CR,tens_dof_position[(num % d_)*d_ + i]] = pen_diff[i]
 
             #boundary facet part

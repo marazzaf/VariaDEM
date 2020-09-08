@@ -3,9 +3,10 @@ import sys
 sys.path.append('../')
 import matplotlib.pyplot as plt
 from scipy.sparse.linalg import spsolve,cg
+import networkx as nx
 from DEM.DEM import *
 from DEM.reconstructions import compute_all_reconstruction_matrices,gradient_matrix
-from DEM.miscellaneous import penalty_FV
+from DEM.miscellaneous import penalty_FV,penalty_boundary
 
 # Form compiler options
 parameters["form_compiler"]["cpp_optimize"] = True
@@ -17,7 +18,7 @@ E = Constant(70e3)
 nu = Constant(0.3)
 lmbda = E*nu/(1+nu)/(1-2*nu)
 mu = E/2./(1+nu)
-penalty = mu #1.e-4 * mu
+penalty = mu
 
 Ll, l = 1., 1. #0.1   # sizes in rectangular mesh
 a = 0.8 #rapport pour déplacement max...
@@ -25,12 +26,6 @@ mesh = Mesh("./mesh/square_1.xml")
 facets = MeshFunction("size_t", mesh, 1)
 ds = Measure('ds')(subdomain_data=facets)
 h_max = mesh.hmax() #Taille du maillage.
-
-# Mesh-related functions
-h = CellVolume(mesh) #Pour volume des particules voisines
-hF = FacetArea(mesh)
-h_avg = (h('+') + h('-'))/ (2. * hF('+'))
-nF = FacetNormal(mesh)
 
 #Function spaces
 U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
@@ -50,14 +45,12 @@ d = dim #pb vectoriel
 #reference solution
 x = SpatialCoordinate(mesh)
 u_ref = Expression(('0.5 * a * (pow(x[0],2) + pow(x[1],2))', '0.5 * a * (pow(x[0],2) + pow(x[1],2))'), a=a, degree=2)
-#Du_ref = Expression(( ('a * x[0]', 'a * (x[0] + x[1])'), ('a * (x[0] + x[1])', 'a * x[1]')), a=a, degree=1)
 Du_ref = Expression(( ('a * x[0]', 'a * x[1]'), ('a * x[0]', 'a * x[1]')), a=a, degree=1)
-
 
 n = FacetNormal(mesh)
 volume_load = -a * (lmbda + 3.*mu) * as_vector([1., 1.])
 
-def F_ext_2(v):
+def F_ext(v):
     return inner(volume_load, v) * dx
 
 def eps(v):
@@ -65,27 +58,6 @@ def eps(v):
 
 def sigma(v):
     return lmbda * div(v) * Identity(dim) + 2. * mu * eps(v)
-
-##Cell-centre Galerkin reconstruction
-#dofm = U_DG.dofmap()
-#nb_ddl_cells = len(dofm.dofs())
-#elt = U_DG.element()
-#dofmap_CG = U_CG.dofmap()
-#nb_ddl_CG = len(dofmap_CG.dofs())
-#face_num = facet_neighborhood(mesh)
-#dofmap_CR = U_CR.dofmap()
-#nb_ddl_CR = len(dofmap_CR.dofs())
-#elt_bis = U_CR.element()
-#dico_pos_bary_faces = dico_position_bary_face(mesh,dofmap_CR,elt_bis)
-#pos_bary_cells = position_ddl_cells(mesh,elt)
-#vertex_associe_face,pos_ddl_vertex,num_ddl_vertex_ccG = dico_position_vertex_bord(mesh, face_num, nb_ddl_cells, d, dim)
-#nb_ddl_ccG = nb_ddl_cells + d * len(pos_ddl_vertex)
-#print('nb dof ccG: %i' % nb_ddl_ccG)
-#convexe_num,convexe_coord = smallest_convexe_bary_coord_bis(face_num,pos_bary_cells,pos_ddl_vertex,dico_pos_bary_faces,dim,d)
-#print('Convexe ok !')
-#passage_ccG_to_CR = matrice_passage_ccG_CR(mesh, nb_ddl_ccG, convexe_num, convexe_coord, vertex_associe_face, num_ddl_vertex_ccG, d, dim)
-#passage_ccG_to_CG = matrice_passage_ccG_CG(mesh, nb_ddl_ccG,num_ddl_vertex_ccG,d,dim)
-#passage_ccG_to_DG = matrice_passage_ccG_DG(nb_ddl_cells,nb_ddl_ccG)
 
 #DEM reconstruction
 DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM = compute_all_reconstruction_matrices(mesh, d)
@@ -98,8 +70,9 @@ AA1 = elastic_bilinear_form(mesh, d, DEM_to_CR, sigma, eps)
 mat_grad = gradient_matrix(mesh, d)
 
 #making the penalty term by hand... See if better...
-mat_pen = penalty_FV(penalty, nb_ddl_ccG, mesh, face_num, d, dim, mat_grad, dico_pos_bary_faces, passage_ccG_to_CR)
-#print(mat_pen.shape)*
+mat_pen = penalty_FV(penalty, nb_dof_DEM, mesh, face_num, d, dim, mat_grad, dico_pos_bary_faces, DEM_to_CR)
+
+mat_pen_bnd = penalty_boundary(penalty, nb_dof_DEM, mesh, face_num, d, num_ddl_vertex_ccG, mat_grad, dico_pos_bary_faces, DEM_to_CR, pos_bary_cells)
 
 # Define variational problem
 u_CR = TrialFunction(U_CR)
@@ -110,24 +83,24 @@ v_CG = TestFunction(U_CG)
 u_DG_1 = TrialFunction(U_DG_1)
 v_DG_1 = TestFunction(U_DG_1)
 
-#cell-boundary
-a3 =  penalty * hF / h * inner(u_CG, v_DG_1) * ds
-A3 = assemble(a3)
-row,col,val = as_backend_type(A3).mat().getValuesCSR()
-A32 = sp.csr_matrix((val, col, row))
-
-a3 =  penalty * hF / h * inner(u_CG, v_CG) * ds
-A3 = assemble(a3)
-row,col,val = as_backend_type(A3).mat().getValuesCSR()
-A33 = sp.csr_matrix((val, col, row))
-
-a3 = penalty * hF / h * inner(v_DG_1('+'), u_DG_1('+')) * ds
-A3 = assemble(a3)
-row,col,val = as_backend_type(A3).mat().getValuesCSR()
-A34 = sp.csr_matrix((val, col, row))
-A34.resize((A32.shape[0],A32.shape[0]))
-
-A_pen_bis = passage_ccG_to_CG.T * A33 * passage_ccG_to_CG -passage_ccG_to_CG.T * A32.T * passage_ccG_to_DG_1 - passage_ccG_to_DG_1.T * A32 * passage_ccG_to_CG + passage_ccG_to_DG_1.T * A34 * passage_ccG_to_DG_1
+##cell-boundary
+#a3 =  penalty * hF / h * inner(u_CG, v_DG_1) * ds
+#A3 = assemble(a3)
+#row,col,val = as_backend_type(A3).mat().getValuesCSR()
+#A32 = sp.csr_matrix((val, col, row))
+#
+#a3 =  penalty * hF / h * inner(u_CG, v_CG) * ds
+#A3 = assemble(a3)
+#row,col,val = as_backend_type(A3).mat().getValuesCSR()
+#A33 = sp.csr_matrix((val, col, row))
+#
+#a3 = penalty * hF / h * inner(v_DG_1('+'), u_DG_1('+')) * ds
+#A3 = assemble(a3)
+#row,col,val = as_backend_type(A3).mat().getValuesCSR()
+#A34 = sp.csr_matrix((val, col, row))
+#A34.resize((A32.shape[0],A32.shape[0]))
+#
+#A_pen_bis = passage_ccG_to_CG.T * A33 * passage_ccG_to_CG -passage_ccG_to_CG.T * A32.T * passage_ccG_to_DG_1 - passage_ccG_to_DG_1.T * A32 * passage_ccG_to_CG + passage_ccG_to_DG_1.T * A34 * passage_ccG_to_DG_1
 
 #Imposition des conditions de Dirichlet Homogène
 a4 = inner(v_CG('+'),as_vector((1.,1.))) / hF * ds
@@ -137,8 +110,7 @@ A_BC = passage_ccG_to_CG.T * A4.get_local()
 A = AA1 + mat_pen + A_pen_bis
 
 #Prise en compte du chargement volumique à l'ancienne... Pour tester...
-L2 = F_ext_2(v_DG) #forme linéaire pour chargement volumique
-#L2 = F_ext_2(v_DG_1)
+L2 = F_ext(v_DG) #forme linéaire pour chargement volumique
 LL2 = assemble(L2)
 b2 = LL2.get_local() #en format DG
 bb2 = passage_ccG_to_DG.T * b2
