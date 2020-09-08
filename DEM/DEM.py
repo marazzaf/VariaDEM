@@ -5,9 +5,10 @@ from scipy.sparse import csr_matrix
 from DEM.errors import *
 
 def elastic_bilinear_form(mesh_, d_, DEM_to_CR_matrix, sigma=grad, eps=grad):
+    dim = mesh_.geometric_dimension()
     if d_ == 1:
         U_CR = FunctionSpace(mesh_, 'CR', 1)
-    elif d_ == 2 or d_ == 3:
+    elif d_ == dim:
         U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
     else:
         raise ValueError('Problem is either scalar or vectorial (in 2d and 3d)')
@@ -18,7 +19,7 @@ def elastic_bilinear_form(mesh_, d_, DEM_to_CR_matrix, sigma=grad, eps=grad):
     #Mettre eps et sigma en arguments de la fonction ?
     if d_ == 1:
         a1 = eps(u_CR) * sigma(v_CR) * dx
-    elif d_ == 2 or d_ == 3:
+    elif d_ == dim:
         a1 = inner(eps(u_CR), sigma(v_CR)) * dx
     else:
         raise ValueError('Problem is either scalar or vectorial (in 2d and 3d)')

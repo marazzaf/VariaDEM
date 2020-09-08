@@ -123,19 +123,17 @@ def connectivity_graph(mesh_, d_): #Contains all necessary mesh information
 
     #importing cell dofs
     for c in cells(mesh_): #Importing cells
+        #possibilité d'avoir numéro des dofs de la cellule et aussi la position du barycentre avec fonctions de fenics
         aux = list(np.arange(count, count+d_))
         count += d_
-        #computing volume and barycentre of the cell
+        #computing barycentre of the cell
         vert = []
-        vert_ind = []
         for v in vertices(c):
             vert.append( np.array(v.point()[:])[:dim] )
-            vert_ind.append(v.index())
-        vol = volumes[c.index()]
         vert = np.array(vert)
         bary = vert.sum(axis=0) / vert.shape[0]
         #adding node to the graph
-        G.add_node(c.index(), dof=aux, pos=bary, measure=vol, vertices=vert, bnd=False) #bnd=True if cell is on boundary of the domain
+        G.add_node(c.index(), dof=aux, pos=bary, bnd=False) #bnd=True if cell is on boundary of the domain
 
     #importing connectivity and facet dofs
     for f in facets(mesh_):
@@ -147,8 +145,6 @@ def connectivity_graph(mesh_, d_): #Contains all necessary mesh information
         vert = []
         for v in vertices(f):
             vert.append( np.array(v.point()[:])[:dim] )
-        normal = normals[num_global_ddl_facet[0] // d_, :]
-        area = areas[num_global_ddl_facet[0] // d_]
         #facet barycentre computation
         vert = np.array(vert)
         bary = vert.sum(axis=0) / vert.shape[0]
@@ -156,13 +152,14 @@ def connectivity_graph(mesh_, d_): #Contains all necessary mesh information
         #adding the facets to the graph
         if len(aux_bis) == 2: #add the link between two cell dofs     
             #adding edge
-            G.add_edge(aux_bis[0],aux_bis[1], num=num_global_ddl_facet[0] // d_, dof_CR=num_global_ddl_facet, measure=area, barycentre=bary, vertices=vert, pen_factor=pen_factor[num_global_ddl_facet[0] // d_], breakable=True)
+            G.add_edge(aux_bis[0],aux_bis[1], num=num_global_ddl_facet[0] // d_, dof_CR=num_global_ddl_facet, barycentre=bary)
 
         elif len(aux_bis) == 1: #add the link between a cell dof and a boundary facet dof
             for c in cells(f): #only one cell contains the boundary facet
                 bary_cell = G.node[c.index()]['pos']
 
-            #checking if adding "dofs" for Dirichlet BC
+            #Adding "dofs" on boudary
+            #Continue to modify what follows.
             nb_dofs = len(dirichlet_dofs & set(num_global_ddl_facet))
             aux = list(np.arange(count, count+nb_dofs))
             count += nb_dofs
@@ -171,7 +168,7 @@ def connectivity_graph(mesh_, d_): #Contains all necessary mesh information
             
             #number of the dof is total number of cells + num of the facet
             G.add_node(nb_ddl_cells // d_ + num_global_ddl_facet[0] // d_, pos=bary, dof=aux)
-            G.add_edge(aux_bis[0], nb_ddl_cells // d_ + num_global_ddl_facet[0] // d_, num=num_global_ddl_facet[0] // d_, dof_CR=num_global_ddl_facet, measure=area, barycentre=bary, vertices=vert, pen_factor=pen_factor[num_global_ddl_facet[0] // d_])
+            G.add_edge(aux_bis[0], nb_ddl_cells // d_ + num_global_ddl_facet[0] // d_, num=num_global_ddl_facet[0] // d_, dof_CR=num_global_ddl_facet, measure=area, barycentre=bary)
             G.node[aux_bis[0]]['bnd'] = True #Cell is on the boundary of the domain
             #Ajouter des noeuds pour les vertex de bord ?
 
