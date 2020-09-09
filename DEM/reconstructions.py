@@ -6,9 +6,10 @@ from scipy.spatial import ConvexHull, Delaunay, KDTree
 from DEM.mesh_related import *
 from DEM.errors import *
 
-def DEM_to_DG_matrix(nb_dof_cells_,nb_dof_ccG_):
+def DEM_to_DG_matrix(problem,nb_dof_ccG_):
     """Creates a csr companion matrix to get the cells values of a DEM vector."""
-    return sp.eye(nb_dof_cells_, n = nb_dof_ccG_, format='csr')
+    nb_cell_dofs = problem.DG_0.dofmap().global_dimension()
+    return sp.eye(nb_cell_dofs, n = nb_dof_ccG_, format='csr')
 
 def DEM_to_CG_matrix(problem, num_vert_ccG, nb_dof_DEM):
     """Creates a csr companion matrix to get the boundary vertex values of a DEM vector."""
@@ -26,7 +27,7 @@ def DEM_to_CG_matrix(problem, num_vert_ccG, nb_dof_DEM):
 
     return matrice_resultat.tocsr()
 
-def DEM_to_DG_1_matrix(problem, nb_dof_ccG_, d_, passage_ccG_CR):
+def DEM_to_DG_1_matrix(problem, nb_dof_ccG_, DEM_to_CR):
     EDG_0 = problem.DG_0
     EDG_1 = problem.DG_1
     tens_DG_0 = problem.W
@@ -36,8 +37,8 @@ def DEM_to_DG_1_matrix(problem, nb_dof_ccG_, d_, passage_ccG_CR):
     dofmap_tens_DG_0 = tens_DG_0.dofmap()
     elt_0 = EDG_0.element()
     elt_1 = EDG_1.element()
-    nb_total_dof_DG_1 = len(dofmap_DG_1.dofs())
-    nb_dof_grad = len(dofmap_tens_DG_0.dofs())
+    nb_total_dof_DG_1 = dofmap_DG_1.global_dimension()
+    nb_dof_grad = dofmap_tens_DG_0.global_dimension()
     matrice_resultat_1 = sp.dok_matrix((nb_total_dof_DG_1,nb_dof_ccG_)) #Empty matrix
     matrice_resultat_2 = sp.dok_matrix((nb_total_dof_DG_1,nb_dof_grad)) #Empty matrix
     
@@ -48,7 +49,7 @@ def DEM_to_DG_1_matrix(problem, nb_dof_ccG_, d_, passage_ccG_CR):
         #filling-in the matrix to have the constant cell value
         DG_0_dofs = dofmap_DG_0.cell_dofs(index_cell)
         for dof in dof_position:
-            matrice_resultat_1[dof, DG_0_dofs[dof % d_]] = 1.
+            matrice_resultat_1[dof, DG_0_dofs[dof % problem.d]] = 1.
 
         #filling-in part to add the gradient term
         position_barycentre = elt_0.tabulate_dof_coordinates(c)[0]
@@ -57,9 +58,9 @@ def DEM_to_DG_1_matrix(problem, nb_dof_ccG_, d_, passage_ccG_CR):
         for dof,pos in zip(dof_position,pos_dof_DG_1): #loop on quadrature points
             diff = pos - position_barycentre
             for i in range(problem.dim):
-                matrice_resultat_2[dof, tens_dof_position[(dof % d_)*d_ + i]] = diff[i]
+                matrice_resultat_2[dof, tens_dof_position[(dof % problem.d)*problem.d + i]] = diff[i]
         
-    return matrice_resultat_1.tocsr() +  matrice_resultat_2.tocsr() * problem.mat_grad * passage_ccG_CR
+    return matrice_resultat_1.tocsr() +  matrice_resultat_2.tocsr() * problem.mat_grad * DEM_to_CR
 
 def gradient_matrix(problem):
     """Creates a matrix computing the cell-wise gradient from the facet values stored in a Crouzeix-raviart FE vector."""
@@ -143,60 +144,52 @@ def facet_interpolation(facet_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d
                                 
     return res_num,res_coord
 
-def DEM_to_CR_matrix(mesh_, nb_dof_ccG, facet_num, vertex_associe_face, num_ddl_vertex, d_, pos_ddl_vertex):
-    dim = mesh_.geometric_dimension()
-    if d_ == 1:
-        ECR = FunctionSpace(mesh_, 'CR', 1)
-        EDG = FunctionSpace(mesh_, 'DG', 0)
-    elif d_ == dim:
-        ECR = VectorFunctionSpace(mesh_, 'CR', 1)
-        EDG = VectorFunctionSpace(mesh_, 'DG', 0)
-    dofmap_CR = ECR.dofmap()
+def DEM_to_CR_matrix(problem, nb_dof_ccG, facet_num, vertex_associe_face, num_ddl_vertex, pos_ddl_vertex):
+    dofmap_CR = problem.CR.dofmap()
     nb_total_dof_CR = dofmap_CR.global_dimension()
 
     #computing the useful mesh quantities
-    pos_bary_cells = position_cell_dofs(mesh_,d_)
-    dico_pos_bary_faces = dico_position_bary_face(mesh_,d_)
+    pos_bary_cells = position_cell_dofs(problem.mesh,problem.d)
+    dico_pos_bary_faces = dico_position_bary_face(problem.mesh,problem.d)
     
     #Computing the facet reconstructions
-    convex_num,convex_coord = facet_interpolation(facet_num,pos_bary_cells,pos_ddl_vertex,dico_pos_bary_faces,dim,d_)
+    convex_num,convex_coord = facet_interpolation(facet_num,pos_bary_cells,pos_ddl_vertex,dico_pos_bary_faces,problem.dim,problem.d)
 
     #Storing the facet reconstructions in a matrix
     matrice_resultat = sp.dok_matrix((nb_total_dof_CR,nb_dof_ccG)) #Matrice vide.
-    for f in facets(mesh_):
+    for f in facets(problem.mesh):
         num_global_face = f.index()
-        num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim - 1, array([num_global_face], dtype="uintp"))
+        num_global_ddl = dofmap_CR.entity_dofs(problem.mesh, problem.dim - 1, array([num_global_face], dtype="uintp"))
         convexe_f = convex_num.get(num_global_face)
         convexe_c = convex_coord.get(num_global_face)
 
         if convexe_f != None: #Face interne, on interpolle la valeur !
             for i,j in zip(convexe_f,convexe_c):
                 matrice_resultat[num_global_ddl[0],i[0]] = j
-                if d_ >= 2:
+                if problem.d >= 2:
                     matrice_resultat[num_global_ddl[1],i[1]] = j
-                if d_ == 3:
+                if problem.d == 3:
                     matrice_resultat[num_global_ddl[2],i[2]] = j
         else: #Face sur le bord, on interpolle la valeur avec les valeurs aux vertex
             pos_init = vertex_associe_face.get(num_global_face)
-            #print(pos_init
             v1 = num_ddl_vertex[pos_init[0]]
             v2 = num_ddl_vertex[pos_init[1]]
-            if dim == 2:
+            if problem.dim == 2:
                 matrice_resultat[num_global_ddl[0], v1[0]] = 0.5
                 matrice_resultat[num_global_ddl[0], v2[0]] = 0.5
-                if d_ == 2: #pb vectoriel
+                if problem.d == 2: #pb vectoriel
                     matrice_resultat[num_global_ddl[1], v1[1]] = 0.5
                     matrice_resultat[num_global_ddl[1], v2[1]] = 0.5
-            if dim == 3:
+            if problem.dim == 3:
                 v3 = num_ddl_vertex[pos_init[2]]
                 matrice_resultat[num_global_ddl[0], v1[0]] = 1./3.
                 matrice_resultat[num_global_ddl[0], v2[0]] = 1./3.
                 matrice_resultat[num_global_ddl[0], v3[0]] = 1./3.
-                if d_ >= 2: #deuxième ligne
+                if problem.d >= 2: #deuxième ligne
                     matrice_resultat[num_global_ddl[1], v1[1]] = 1./3.
                     matrice_resultat[num_global_ddl[1], v2[1]] = 1./3.
                     matrice_resultat[num_global_ddl[1], v3[1]] = 1./3.
-                if d_ == 3: #troisième ligne
+                if problem.d == 3: #troisième ligne
                     matrice_resultat[num_global_ddl[2], v1[2]] = 1./3.
                     matrice_resultat[num_global_ddl[2], v2[2]] = 1./3.
                     matrice_resultat[num_global_ddl[2], v3[2]] = 1./3.
@@ -206,16 +199,14 @@ def DEM_to_CR_matrix(mesh_, nb_dof_ccG, facet_num, vertex_associe_face, num_ddl_
 def compute_all_reconstruction_matrices(problem):
     """Computes all the required reconstruction matrices."""
 
-    nb_cell_dofs = problem.DG_0.dofmap().global_dimension()
-
     #mesh related quantities
     facet_num = facet_neighborhood(problem.mesh)
     vertex_associe_face,pos_ddl_vertex,num_ddl_vertex,nb_dof_DEM = dico_position_vertex_bord(problem.mesh, facet_num, problem.d)
 
     #calling functions to construct the matrices
-    DEM_to_DG = DEM_to_DG_matrix(nb_cell_dofs,nb_dof_DEM)
+    DEM_to_DG = DEM_to_DG_matrix(problem,nb_dof_DEM)
     DEM_to_CG = DEM_to_CG_matrix(problem, num_ddl_vertex, nb_dof_DEM)
-    DEM_to_CR = DEM_to_CR_matrix(problem.mesh, nb_dof_DEM, facet_num, vertex_associe_face, num_ddl_vertex, problem.d, pos_ddl_vertex)
-    DEM_to_DG_1 = DEM_to_DG_1_matrix(problem, nb_dof_DEM, problem.d, DEM_to_CR)
+    DEM_to_CR = DEM_to_CR_matrix(problem, nb_dof_DEM, facet_num, vertex_associe_face, num_ddl_vertex, pos_ddl_vertex)
+    DEM_to_DG_1 = DEM_to_DG_1_matrix(problem, nb_dof_DEM, DEM_to_CR)
 
     return DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM
