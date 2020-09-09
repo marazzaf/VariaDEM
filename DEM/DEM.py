@@ -15,24 +15,26 @@ class DEMProblem:
 
         #Define the necessary functionnal spaces depending on d
         if self.d == 1:
-            self.U_CR = FunctionSpace(self.mesh, 'CR', 1)
+            self.CR = FunctionSpace(self.mesh, 'CR', 1)
             self.W = VectorFunctionSpace(self.mesh, 'DG', 0)
             self.DG_0 = FunctionSpace(self.mesh, 'DG', 0)
             self.DG_1 = FunctionSpace(self.mesh, 'DG', 1)
+            self.CG = FunctionSpace(self.mesh,'CG', 1)
         elif self.d == self.dim:
-            self.U_CR = VectorFunctionSpace(self.mesh, 'CR', 1)
+            self.CR = VectorFunctionSpace(self.mesh, 'CR', 1)
             self.W = TensorFunctionSpace(self.mesh, 'DG', 0)
             self.DG_0 = VectorFunctionSpace(self.mesh, 'DG', 0)
             self.DG_1 = VectorFunctionSpace(self.mesh, 'DG', 1)
+            self.CG = VectorFunctionSpace(self.mesh,'CG', 1)
         else:
-            raise ValueError('Problem is wheter scalar or vectorial')
+            raise ValueError('Problem is whether scalar or vectorial')
 
         #gradient
         self.mat_grad = gradient_matrix(self)
 
-        #DEM reconstruction
+        #DEM reconstructions
         self.DEM_to_DG, self.DEM_to_CG, self.DEM_to_CR, self.DEM_to_DG_1, self.nb_dof_DEM = compute_all_reconstruction_matrices(self)
-        print('matrices passage ok !')
+        print('Reconstruction matrices ok!')
 
 
 def elastic_bilinear_form(mesh_, d_, DEM_to_CR_matrix, sigma=grad, eps=grad):

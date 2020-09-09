@@ -10,24 +10,19 @@ def DEM_to_DG_matrix(nb_dof_cells_,nb_dof_ccG_):
     """Creates a csr companion matrix to get the cells values of a DEM vector."""
     return sp.eye(nb_dof_cells_, n = nb_dof_ccG_, format='csr')
 
-def DEM_to_CG_matrix(mesh_, nb_dof_ccG_,num_vert_ccG,d_):
+def DEM_to_CG_matrix(problem, num_vert_ccG, nb_dof_DEM):
     """Creates a csr companion matrix to get the boundary vertex values of a DEM vector."""
-    dim = mesh_.geometric_dimension()
-    if d_ == 1:
-        U_CG = FunctionSpace(mesh_,'CG', 1)
-    elif d_ == dim:
-        U_CG = VectorFunctionSpace(mesh_,'CG', 1)
-    nb_dof_CG = U_CG.dofmap().global_dimension()
-    matrice_resultat = sp.dok_matrix((nb_dof_CG,nb_dof_ccG_)) #Matrice vide.
-    vert_to_dof = vertex_to_dof_map(U_CG)
+    nb_dof_CG = problem.CG.dofmap().global_dimension()
+    matrice_resultat = sp.dok_matrix((nb_dof_CG,nb_dof_DEM)) #Empty matrix
+    vert_to_dof = vertex_to_dof_map(problem.CG)
 
     #mettre des 1 à la bonne place dans la matrice...
-    for (i,j),k in zip(num_vert_ccG.items(),range(nb_dof_ccG_)): #On boucle sur le numéro des vertex
-        matrice_resultat[vert_to_dof[i*d_], j[0]] = 1.
-        if d_ >= 2:
-            matrice_resultat[vert_to_dof[i*d_]+1, j[1]] = 1.
-        if d_ == 3:
-            matrice_resultat[vert_to_dof[i*d_]+2, j[2]] = 1.
+    for (i,j),k in zip(num_vert_ccG.items(),range(nb_dof_DEM)): #On boucle sur le numéro des vertex
+        matrice_resultat[vert_to_dof[i*problem.d], j[0]] = 1.
+        if problem.d >= 2:
+            matrice_resultat[vert_to_dof[i*problem.d]+1, j[1]] = 1.
+        if problem.d == 3:
+            matrice_resultat[vert_to_dof[i*problem.d]+2, j[2]] = 1.
 
     return matrice_resultat.tocsr()
 
@@ -71,7 +66,7 @@ def gradient_matrix(problem):
     vol = CellVolume(problem.mesh)
 
     #variational form gradient
-    u_CR = TrialFunction(problem.U_CR)
+    u_CR = TrialFunction(problem.CR)
     Dv_DG = TestFunction(problem.W)
     a = inner(grad(u_CR), Dv_DG) / vol * dx
     A = assemble(a)
@@ -215,12 +210,12 @@ def compute_all_reconstruction_matrices(problem):
 
     #mesh related quantities
     facet_num = facet_neighborhood(problem.mesh)
-    vertex_associe_face,pos_ddl_vertex,num_ddl_vertex_ccG,nb_dof_DEM = dico_position_vertex_bord(problem.mesh, facet_num, problem.d)
+    vertex_associe_face,pos_ddl_vertex,num_ddl_vertex,nb_dof_DEM = dico_position_vertex_bord(problem.mesh, facet_num, problem.d)
 
     #calling functions to construct the matrices
     DEM_to_DG = DEM_to_DG_matrix(nb_cell_dofs,nb_dof_DEM)
-    DEM_to_CG = DEM_to_CG_matrix(problem.mesh, nb_dof_DEM, num_ddl_vertex_ccG, problem.d)
-    DEM_to_CR = DEM_to_CR_matrix(problem.mesh, nb_dof_DEM, facet_num, vertex_associe_face, num_ddl_vertex_ccG, problem.d, pos_ddl_vertex)
+    DEM_to_CG = DEM_to_CG_matrix(problem, num_ddl_vertex, nb_dof_DEM)
+    DEM_to_CR = DEM_to_CR_matrix(problem.mesh, nb_dof_DEM, facet_num, vertex_associe_face, num_ddl_vertex, problem.d, pos_ddl_vertex)
     DEM_to_DG_1 = DEM_to_DG_1_matrix(problem, nb_dof_DEM, problem.d, DEM_to_CR)
 
     return DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM
