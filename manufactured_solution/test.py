@@ -3,10 +3,8 @@ import sys
 sys.path.append('../')
 import matplotlib.pyplot as plt
 from scipy.sparse.linalg import spsolve,cg
-import networkx as nx
-from DEM.DEM import *
-from DEM.reconstructions import compute_all_reconstruction_matrices,gradient_matrix
-from DEM.miscellaneous import penalty_FV,penalty_boundary
+from DEM.DEM import DEMProblem,penalty_FV,penalty_boundary
+from dolfin import *
 
 # Form compiler options
 parameters["form_compiler"]["cpp_optimize"] = True
@@ -26,21 +24,22 @@ mesh = Mesh("./mesh/square_1.xml")
 facets = MeshFunction("size_t", mesh, 1)
 ds = Measure('ds')(subdomain_data=facets)
 h_max = mesh.hmax() #Taille du maillage.
+d = mesh.geometric_dimension() #vectorial problem
+
+#Creating the DEM problem
+problem = DEMProblem(mesh, d, penalty)
 
 #Function spaces
 U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
 U_DG_1 = VectorFunctionSpace(mesh, 'DG', 1) #Pour reconstruction ccG
 U_CR = VectorFunctionSpace(mesh, 'CR', 1) #Pour interpollation dans les faces
 U_CG = VectorFunctionSpace(mesh, 'CG', 1) #Pour bc
-W0 = FunctionSpace(mesh, 'DG', 0) 
-W = TensorFunctionSpace(mesh, 'DG', 0)
 
 #Functions for computation
 solution_u_CR = Function(U_CR,  name="CR")
 solution_u_DG_1 = Function(U_DG_1,  name="DG 1")
 error = Function(U_DG_1, name='Error')
 dim = solution_u_DG_1.geometric_dimension()  # space dimension
-d = dim #pb vectoriel
 
 #reference solution
 x = SpatialCoordinate(mesh)
@@ -59,22 +58,17 @@ def eps(v):
 def sigma(v):
     return lmbda * div(v) * Identity(dim) + 2. * mu * eps(v)
 
-#DEM reconstruction
-DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM = compute_all_reconstruction_matrices(mesh, d)
-print('matrices passage ok !')
-
 #Elastic bilinear form
-AA1 = elastic_bilinear_form(mesh, d, DEM_to_CR, sigma, eps)
-
-#gradient matrix
-mat_grad = gradient_matrix(mesh, d)
+AA1 = elastic_bilinear_form(problem.mesh, problem.d, problem.DEM_to_CR, sigma, eps)
 
 #making the penalty term by hand... See if better...
-mat_pen = penalty_FV(penalty, nb_dof_DEM, mesh, face_num, d, dim, mat_grad, dico_pos_bary_faces, DEM_to_CR)
+mat_pen = penalty_FV(problem)
 
 mat_pen_bnd = penalty_boundary(penalty, nb_dof_DEM, mesh, face_num, d, num_ddl_vertex_ccG, mat_grad, dico_pos_bary_faces, DEM_to_CR, pos_bary_cells)
 
 A = AA1 + mat_pen + A_pen_bis
+
+sys.exit()
 
 # Define variational problem
 u_CR = TrialFunction(U_CR)

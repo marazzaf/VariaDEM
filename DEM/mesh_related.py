@@ -1,8 +1,6 @@
 # coding: utf-8
 from dolfin import *
 from numpy import array
-import networkx as nx
-from DEM.errors import *
 
 def facet_neighborhood(mesh_):
     """Returns a dictionnary containing as key the index of the facets and as values the list of indices of the cells (or cell) containing the facet. """
@@ -89,90 +87,3 @@ def dico_position_vertex_bord(mesh_, face_num, d_):
     nb_DEM_dofs = nb_cell_dofs + d_ * len(pos_ddl_vertex)
 
     return vertex_associe_face,pos_ddl_vertex,num_ddl_vertex_ccG,nb_DEM_dofs
-
-def connectivity_graph(mesh_, d_): #Contains all necessary mesh information
-    G = nx.Graph()
-
-    #useful mesh entities
-    dim = mesh_.topology().dim()
-    if d_ == 1:
-        U_CR = FunctionSpace(mesh_, 'CR', 1)
-        U_DG = FunctionSpace(mesh_, 'DG', 0)
-    elif d_ == 2 or d_ == 3:
-        U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
-        U_DG = VectorFunctionSpace(mesh_, 'DG', 0)
-    else:
-        raise DimensionError
-    nb_ddl_cells = U_DG.dofmap().global_dimension()
-    dofmap_CR = U_CR.dofmap()
-    nb_dof_CR = dofmap_CR.global_dimension()
-
-    #useful auxiliary functions
-    vol_c = CellVolume(mesh_) #Pour volume des particules voisines
-    hF = FacetArea(mesh_)
-    scalar_DG = FunctionSpace(mesh_, 'DG', 0) #for volumes
-    f_DG = TestFunction(scalar_DG)
-    scalar_CR = FunctionSpace(mesh_, 'CR', 1) #for surfaces
-    f_CR = TestFunction(scalar_CR)
-
-    #computation of volumes, surfaces and normals
-    volumes = assemble(f_DG * dx).get_local()
-    assert(volumes.min() > 0.)
-    areas = assemble(f_CR('+') * (dS + ds)).get_local()
-    assert(areas.min() > 0.)
-
-    #importing cell dofs
-    for c in cells(mesh_): #Importing cells
-        #possibilité d'avoir numéro des dofs de la cellule et aussi la position du barycentre avec fonctions de fenics
-        aux = list(np.arange(count, count+d_))
-        count += d_
-        #computing barycentre of the cell
-        vert = []
-        for v in vertices(c):
-            vert.append( np.array(v.point()[:])[:dim] )
-        vert = np.array(vert)
-        bary = vert.sum(axis=0) / vert.shape[0]
-        #adding node to the graph
-        G.add_node(c.index(), dof=aux, pos=bary, bnd=False) #bnd=True if cell is on boundary of the domain
-
-    #importing connectivity and facet dofs
-    for f in facets(mesh_):
-        aux_bis = [] #number of the cells
-        for c in cells(f):
-            aux_bis.append(c.index())
-        num_global_ddl_facet = dofmap_CR.entity_dofs(mesh_, dim - 1, np.array([f.index()], dtype="uintp")) #number of the dofs in CR
-        #computing quantites related to the facets
-        vert = []
-        for v in vertices(f):
-            vert.append( np.array(v.point()[:])[:dim] )
-        #facet barycentre computation
-        vert = np.array(vert)
-        bary = vert.sum(axis=0) / vert.shape[0]
-
-        #adding the facets to the graph
-        if len(aux_bis) == 2: #add the link between two cell dofs     
-            #adding edge
-            G.add_edge(aux_bis[0],aux_bis[1], num=num_global_ddl_facet[0] // d_, dof_CR=num_global_ddl_facet, barycentre=bary)
-
-        elif len(aux_bis) == 1: #add the link between a cell dof and a boundary facet dof
-            for c in cells(f): #only one cell contains the boundary facet
-                bary_cell = G.node[c.index()]['pos']
-
-            #Adding "dofs" on boudary
-            #Continue to modify what follows.
-            nb_dofs = len(dirichlet_dofs & set(num_global_ddl_facet))
-            aux = list(np.arange(count, count+nb_dofs))
-            count += nb_dofs
-            components = sorted(list(dirichlet_dofs & set(num_global_ddl_facet)))
-            components = np.array(components) % d_
-            
-            #number of the dof is total number of cells + num of the facet
-            G.add_node(nb_ddl_cells // d_ + num_global_ddl_facet[0] // d_, pos=bary, dof=aux)
-            G.add_edge(aux_bis[0], nb_ddl_cells // d_ + num_global_ddl_facet[0] // d_, num=num_global_ddl_facet[0] // d_, dof_CR=num_global_ddl_facet, measure=area, barycentre=bary)
-            G.node[aux_bis[0]]['bnd'] = True #Cell is on the boundary of the domain
-            #Ajouter des noeuds pour les vertex de bord ?
-
-        else:
-            raise ValueError('A facet cannot have more than 2 neighbours!')
-                
-    return G
