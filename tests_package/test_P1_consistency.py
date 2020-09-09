@@ -1,7 +1,8 @@
 # coding: utf-8
 import sys
 sys.path.append('../')
-from DEM import *
+from DEM.DEM import *
+from DEM.miscellaneous import DEM_interpolation,local_project
 import pytest
 
 #import pytest #for unit tests
@@ -17,12 +18,15 @@ def test_reconstruction(mesh):
     dim = mesh.geometric_dimension()
     d = dim #scalar problem #dim #vectorial problem
 
-    #DEM reconstruction
-    DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM = compute_all_reconstruction_matrices(mesh, d)
+    #DEM problem creation with reconstruction matrices
+    problem = DEMProblem(mesh, d, 0.)
+
+    ##DEM reconstruction
+    #DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM = compute_all_reconstruction_matrices(mesh, d)
 
     #Testing P1 consistency and that's all
     x = SpatialCoordinate(mesh)
-    u = DEM_interpolation(x, mesh, d, DEM_to_CG, DEM_to_DG)
+    u = DEM_interpolation(x, mesh, d, problem.DEM_to_CG, problem.DEM_to_DG)
     assert abs(max(u) - L) < eps
     assert abs(min(u) + L) < eps
 
@@ -34,7 +38,7 @@ def test_reconstruction(mesh):
 
     #CR interpolation
     test_CR = Function(U_CR)
-    reco_CR = DEM_to_CR * u
+    reco_CR = problem.DEM_to_CR * u
     test_CR.vector().set_local(reco_CR)
     assert abs(max(reco_CR) - L) < eps
     assert abs(min(reco_CR) + L) < eps
@@ -63,7 +67,7 @@ def test_reconstruction(mesh):
 
     #P1-discontinuous reconstruction
     test_DG_1 = Function(U_DG_1)
-    test_DG_1.vector().set_local(DEM_to_DG_1 * u)
+    test_DG_1.vector().set_local(problem.DEM_to_DG_1 * u)
     assert abs(max(test_DG_1.vector().get_local()) - L) < eps
     assert abs(min(test_DG_1.vector().get_local()) + L) < eps
 
