@@ -3,7 +3,7 @@ import sys
 sys.path.append('../')
 import matplotlib.pyplot as plt
 from scipy.sparse.linalg import spsolve,cg
-from DEM.DEM import DEMProblem,penalty_FV,penalty_boundary
+from DEM.DEM import *
 from dolfin import *
 
 # Form compiler options
@@ -62,11 +62,11 @@ def sigma(v):
 AA1 = elastic_bilinear_form(problem.mesh, problem.d, problem.DEM_to_CR, sigma, eps)
 
 #making the penalty term by hand... See if better...
-mat_pen = penalty_FV(problem)
+mat_pen = penalties(problem)
 
-mat_pen_bnd = penalty_boundary(penalty, nb_dof_DEM, mesh, face_num, d, num_ddl_vertex_ccG, mat_grad, dico_pos_bary_faces, DEM_to_CR, pos_bary_cells)
+#mat_pen_bnd = penalty_boundary(penalty, nb_dof_DEM, mesh, face_num, d, num_ddl_vertex_ccG, mat_grad, dico_pos_bary_faces, DEM_to_CR, pos_bary_cells)
 
-A = AA1 + mat_pen + A_pen_bis
+A = AA1 + mat_pen# + A_pen_bis
 
 sys.exit()
 

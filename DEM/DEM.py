@@ -1,10 +1,11 @@
 # coding: utf-8
 
 from dolfin import *
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix,dok_matrix
+import numpy as np
 from DEM.errors import *
 from DEM.reconstructions import compute_all_reconstruction_matrices,gradient_matrix
-from DEM.mesh_related import facet_neighborhood,dico_position_bary_face
+from DEM.mesh_related import *
 
 class DEMProblem:
     """ Class that will contain the basics of a DEM problem from the mesh and the dimension of the problem to reconstrucion matrices and gradient matrix."""
@@ -36,9 +37,11 @@ class DEMProblem:
         #useful
         self.facet_num = facet_neighborhood(self.mesh)
         self.bary_facets = dico_position_bary_face(self.mesh, self.d)
+        self.vertex_associe_face,self.pos_ddl_vertex,self.num_ddl_vertex,self.nb_dof_DEM = dico_position_vertex_bord(self.mesh, self.facet_num, self.d)
+        self.bary_cells = position_cell_dofs(self.mesh,self.d)
 
         #DEM reconstructions
-        self.DEM_to_DG, self.DEM_to_CG, self.DEM_to_CR, self.DEM_to_DG_1, self.nb_dof_DEM = compute_all_reconstruction_matrices(self)
+        self.DEM_to_DG, self.DEM_to_CG, self.DEM_to_CR, self.DEM_to_DG_1 = compute_all_reconstruction_matrices(self)
         print('Reconstruction matrices ok!')
 
 
@@ -67,8 +70,7 @@ def elastic_bilinear_form(mesh_, d_, DEM_to_CR_matrix, sigma=grad, eps=grad):
     A1 = csr_matrix((val, col, row))
     return DEM_to_CR_matrix.T * A1 * DEM_to_CR_matrix
 
-def penalty_FV(problem):
-    #penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim_, mat_grad_, dico_pos_bary_facet, passage_ccG_CR_):
+def penalties(problem):
     """Creates the penalty matrix to stabilize the DEM."""
 
     if problem.d == problem.dim:
@@ -79,7 +81,7 @@ def penalty_FV(problem):
         raise ValueError
         
     dofmap_CR = problem.CR.dofmap()
-    elt_DG = problem.DG.element()
+    elt_DG = problem.DG_0.element()
     nb_ddl_CR = dofmap_CR.global_dimension()
     dofmap_tens_DG_0 = tens_DG_0.dofmap()
     nb_ddl_grad = dofmap_tens_DG_0.global_dimension()
@@ -90,86 +92,106 @@ def penalty_FV(problem):
     testt = TestFunction(problem.CR)
     helpp = Function(problem.CR)
     helpp.vector().set_local(np.ones_like(helpp.vector().get_local()))
-    a_aux = penalty_ * (2.*hF('+'))/ (vol('+') + vol('-')) * inner(helpp('+'), testt('+')) * dS
+    a_aux = problem.penalty * (2.*hF('+'))/ (vol('+') + vol('-')) * inner(helpp('+'), testt('+')) * dS
     mat = assemble(a_aux).get_local()
 
     #creating jump matrix
     mat_jump_1 = dok_matrix((nb_ddl_CR,problem.nb_dof_DEM))
     mat_jump_2 = dok_matrix((nb_ddl_CR,nb_ddl_grad))
     for f in facets(problem.mesh):
-        if len(problem.facet_num.get(f.index())) == 2: #Face interne
-            num_global_face = f.index()
-            num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim_ - 1, np.array([num_global_face], dtype="uintp"))
-            coeff_pen = mat[num_global_ddl][0]
-            pos_bary_facet = bary_facets[f.index()] #position barycentre of facet
-            #print(pos_bary_facet)
-            for c,num_cell,sign in zip(cells(f),face_num.get(num_global_face),[1., -1.]):
-                #filling-in the DG 0 part of the jump
-                mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,d_ * num_cell : (num_cell+1) * d_] = sign*np.sqrt(coeff_pen)*np.eye(d_)
+        num_global_face = f.index()
+        num_global_ddl = dofmap_CR.entity_dofs(problem.mesh, problem.dim - 1, np.array([num_global_face], dtype="uintp"))
+        coeff_pen = mat[num_global_ddl][0]
+        pos_bary_facet = problem.bary_facets[f.index()] #position barycentre of facet
+        
+        if len(problem.facet_num.get(f.index())) == 2: #Internal facet
+            for c,num_cell,sign in zip(cells(f),problem.facet_num.get(num_global_face),[1., -1.]):
+                #filling-out the DG 0 part of the jump
+                mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,problem.d * num_cell : (num_cell+1) * problem.d] = sign*np.sqrt(coeff_pen)*np.eye(problem.d)
                 
-                #filling-in the DG 1 part of the jump...
+                #filling-out the DG 1 part of the jump...
                 pos_bary_cell = elt_DG.tabulate_dof_coordinates(c)[0]
                 diff = pos_bary_facet - pos_bary_cell
                 pen_diff = np.sqrt(coeff_pen)*diff
                 tens_dof_position = dofmap_tens_DG_0.cell_dofs(num_cell)
                 for num,dof_CR in enumerate(num_global_ddl):
-                    for i in range(dim_):
-                        mat_jump_2[dof_CR,tens_dof_position[(num % d_)*d_ + i]] = sign*pen_diff[i]
-            
-    mat_jump = mat_jump_1.tocsr() + mat_jump_2.tocsr() * problem.mat_grad * problem.DEM_to_CR
-    return mat_jump.T * mat_jump
+                    for i in range(problem.dim):
+                        mat_jump_2[dof_CR,tens_dof_position[(num % problem.d)*problem.d + i]] = sign*pen_diff[i]
 
-def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, num_ddl_vertex_ccG, mat_grad_, dico_pos_bary_facet, passage_ccG_CR_, pos_bary_cells):
-    dim = mesh_.geometric_dimension()
-    if d_ >= 2:
-        U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
-        tens_DG_0 = TensorFunctionSpace(mesh_, 'DG', 0)
-    else:
-        U_CR = FunctionSpace(mesh_, 'CR', 1) #Pour interpollation dans les faces
-        tens_DG_0 = VectorFunctionSpace(mesh_, 'DG', 0)
-        
-    dofmap_CR = U_CR.dofmap()
-    nb_ddl_CR = dofmap_CR.global_dimension()
-    dofmap_tens_DG_0 = tens_DG_0.dofmap()
-    nb_ddl_grad = dofmap_tens_DG_0.global_dimension()
-
-    #assembling penalty factor
-    vol = CellVolume(mesh_)
-    hF = FacetArea(mesh_)
-    testt = TestFunction(U_CR)
-    helpp = Function(U_CR)
-    helpp.vector().set_local(np.ones_like(helpp.vector().get_local()))
-    a_aux = penalty_ * hF / vol * inner(helpp, testt) * ds
-    mat = assemble(a_aux).get_local()
-
-    #creating jump matrix
-    mat_jump_1 = dok_matrix((nb_ddl_CR,nb_ddl_ccG_))
-    mat_jump_2 = dok_matrix((nb_ddl_CR,nb_ddl_grad))
-    for f in facets(mesh_):
-        if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
-            num_global_face = f.index()
-            num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim - 1, np.array([num_global_face], dtype="uintp"))
-            coeff_pen = mat[num_global_ddl][0]
-            pos_bary_facet = dico_pos_bary_facet[f.index()] #position barycentre of facet
-
+        elif len(problem.facet_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
             #cell part
-            #filling-in the DG 0 part of the jump
-            num_cell = face_num.get(f.index())[0]
-            mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,d_ * num_cell : (num_cell+1) * d_] = np.sqrt(coeff_pen)*np.eye(d_)
+            #filling-out the DG 0 part of the jump
+            num_cell = problem.facet_num.get(f.index())[0]
+            mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,problem.d * num_cell : (num_cell+1) * problem.d] = np.sqrt(coeff_pen)*np.eye(problem.d)
 
-            #filling-in the DG 1 part of the jump
-            pos_bary_cell = pos_bary_cells.get(num_cell)
+            #filling-out the DG 1 part of the jump
+            pos_bary_cell = problem.bary_cells.get(num_cell)
             diff = pos_bary_facet - pos_bary_cell
             pen_diff = np.sqrt(coeff_pen)*diff
             tens_dof_position = dofmap_tens_DG_0.cell_dofs(num_cell)
             for num,dof_CR in enumerate(num_global_ddl):
-                for i in range(dim):
-                    mat_jump_2[dof_CR,tens_dof_position[(num % d_)*d_ + i]] = pen_diff[i]
+                for i in range(problem.dim):
+                    mat_jump_2[dof_CR,tens_dof_position[(num % problem.d)*problem.d + i]] = pen_diff[i]
 
             #boundary facet part
             for v in vertices(f):
-                dof_vert = num_ddl_vertex_ccG.get(v.index())
-                mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,dof_vert[0]:dof_vert[-1]+1] = -np.sqrt(coeff_pen)*np.eye(d_) / d_
+                dof_vert = problem.num_ddl_vertex.get(v.index())
+                mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,dof_vert[0]:dof_vert[-1]+1] = -np.sqrt(coeff_pen)*np.eye(problem.d) / problem.d
+            
+    mat_jump = mat_jump_1.tocsr() + mat_jump_2.tocsr() * problem.mat_grad * problem.DEM_to_CR
+    return mat_jump.T * mat_jump
 
-    mat_jump_bnd = mat_jump_1.tocsr() + mat_jump_2.tocsr() * mat_grad_ * passage_ccG_CR_
-    return mat_jump_bnd.T * mat_jump_bnd
+#def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, num_ddl_vertex_ccG, mat_grad_, dico_pos_bary_facet, passage_ccG_CR_, pos_bary_cells):
+#    dim = mesh_.geometric_dimension()
+#    if d_ >= 2:
+#        U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
+#        tens_DG_0 = TensorFunctionSpace(mesh_, 'DG', 0)
+#    else:
+#        U_CR = FunctionSpace(mesh_, 'CR', 1) #Pour interpollation dans les faces
+#        tens_DG_0 = VectorFunctionSpace(mesh_, 'DG', 0)
+#        
+#    dofmap_CR = U_CR.dofmap()
+#    nb_ddl_CR = dofmap_CR.global_dimension()
+#    dofmap_tens_DG_0 = tens_DG_0.dofmap()
+#    nb_ddl_grad = dofmap_tens_DG_0.global_dimension()
+#
+#    #assembling penalty factor
+#    vol = CellVolume(mesh_)
+#    hF = FacetArea(mesh_)
+#    testt = TestFunction(U_CR)
+#    helpp = Function(U_CR)
+#    helpp.vector().set_local(np.ones_like(helpp.vector().get_local()))
+#    a_aux = penalty_ * hF / vol * inner(helpp, testt) * ds
+#    mat = assemble(a_aux).get_local()
+#
+#    #creating jump matrix
+#    mat_jump_1 = dok_matrix((nb_ddl_CR,nb_ddl_ccG_))
+#    mat_jump_2 = dok_matrix((nb_ddl_CR,nb_ddl_grad))
+#    for f in facets(mesh_):
+#        if len(face_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
+#            num_global_face = f.index()
+#            num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim - 1, np.array([num_global_face], dtype="uintp"))
+#            coeff_pen = mat[num_global_ddl][0]
+#            pos_bary_facet = dico_pos_bary_facet[f.index()] #position barycentre of facet
+#
+#            #cell part
+#            #filling-in the DG 0 part of the jump
+#            num_cell = face_num.get(f.index())[0]
+#            mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,d_ * num_cell : (num_cell+1) * d_] = np.sqrt(coeff_pen)*np.eye(d_)
+#
+#            #filling-in the DG 1 part of the jump
+#            pos_bary_cell = pos_bary_cells.get(num_cell)
+#            diff = pos_bary_facet - pos_bary_cell
+#            pen_diff = np.sqrt(coeff_pen)*diff
+#            tens_dof_position = dofmap_tens_DG_0.cell_dofs(num_cell)
+#            for num,dof_CR in enumerate(num_global_ddl):
+#                for i in range(dim):
+#                    mat_jump_2[dof_CR,tens_dof_position[(num % d_)*d_ + i]] = pen_diff[i]
+#
+#            #boundary facet part
+#            for v in vertices(f):
+#                dof_vert = num_ddl_vertex_ccG.get(v.index())
+#                mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,dof_vert[0]:dof_vert[-1]+1] = -np.sqrt(coeff_pen)*np.eye(d_) / d_
+#
+#    mat_jump_bnd = mat_jump_1.tocsr() + mat_jump_2.tocsr() * mat_grad_ * passage_ccG_CR_
+#    return mat_jump_bnd.T * mat_jump_bnd

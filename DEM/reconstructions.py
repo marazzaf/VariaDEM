@@ -199,13 +199,10 @@ def DEM_to_CR_matrix(problem, nb_dof_ccG, facet_num, vertex_associe_face, num_dd
 def compute_all_reconstruction_matrices(problem):
     """Computes all the required reconstruction matrices."""
 
-    #mesh related quantities
-    vertex_associe_face,pos_ddl_vertex,num_ddl_vertex,nb_dof_DEM = dico_position_vertex_bord(problem.mesh, problem.facet_num, problem.d)
-
     #calling functions to construct the matrices
-    DEM_to_DG = DEM_to_DG_matrix(problem, nb_dof_DEM)
-    DEM_to_CG = DEM_to_CG_matrix(problem, num_ddl_vertex, nb_dof_DEM)
-    DEM_to_CR = DEM_to_CR_matrix(problem, nb_dof_DEM, problem.facet_num, vertex_associe_face, num_ddl_vertex, pos_ddl_vertex)
-    DEM_to_DG_1 = DEM_to_DG_1_matrix(problem, nb_dof_DEM, DEM_to_CR)
+    DEM_to_DG = DEM_to_DG_matrix(problem, problem.nb_dof_DEM)
+    DEM_to_CG = DEM_to_CG_matrix(problem, problem.num_ddl_vertex, problem.nb_dof_DEM)
+    DEM_to_CR = DEM_to_CR_matrix(problem, problem.nb_dof_DEM, problem.facet_num, problem.vertex_associe_face, problem.num_ddl_vertex, problem.pos_ddl_vertex)
+    DEM_to_DG_1 = DEM_to_DG_1_matrix(problem, problem.nb_dof_DEM, DEM_to_CR)
 
-    return DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM
+    return DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1
