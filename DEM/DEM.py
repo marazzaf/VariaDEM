@@ -4,6 +4,7 @@ from dolfin import *
 from scipy.sparse import csr_matrix
 from DEM.errors import *
 from DEM.reconstructions import compute_all_reconstruction_matrices,gradient_matrix
+from DEM.mesh_related import facet_neighborhood,dico_position_bary_face
 
 class DEMProblem:
     """ Class that will contain the basics of a DEM problem from the mesh and the dimension of the problem to reconstrucion matrices and gradient matrix."""
@@ -31,6 +32,10 @@ class DEMProblem:
 
         #gradient
         self.mat_grad = gradient_matrix(self)
+
+        #useful
+        self.facet_num = facet_neighborhood(self.mesh)
+        self.bary_facets = dico_position_bary_face(self.mesh, self.d)
 
         #DEM reconstructions
         self.DEM_to_DG, self.DEM_to_CG, self.DEM_to_CR, self.DEM_to_DG_1, self.nb_dof_DEM = compute_all_reconstruction_matrices(self)
@@ -65,40 +70,38 @@ def elastic_bilinear_form(mesh_, d_, DEM_to_CR_matrix, sigma=grad, eps=grad):
 def penalty_FV(problem):
     #penalty_, nb_ddl_ccG_, mesh_, face_num, d_, dim_, mat_grad_, dico_pos_bary_facet, passage_ccG_CR_):
     """Creates the penalty matrix to stabilize the DEM."""
-    if d_ >= 2:
-        U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
-        U_DG = VectorFunctionSpace(mesh_, 'DG', 0)
-        tens_DG_0 = TensorFunctionSpace(mesh_, 'DG', 0)
+
+    if problem.d == problem.dim:
+        tens_DG_0 = TensorFunctionSpace(problem.mesh, 'DG', 0)
+    elif problem.d == 1:
+        tens_DG_0 = VectorFunctionSpace(problem.mesh, 'DG', 0)
     else:
-        U_CR = FunctionSpace(mesh_, 'CR', 1)
-        U_DG = FunctionSpace(mesh_, 'DG', 0)
-        tens_DG_0 = VectorFunctionSpace(mesh_, 'DG', 0)
+        raise ValueError
         
-    dofmap_CR = U_CR.dofmap()
-    elt_CR = U_CR.element()
-    elt_DG = U_DG.element()
-    nb_ddl_CR = len(dofmap_CR.dofs())
+    dofmap_CR = problem.CR.dofmap()
+    elt_DG = problem.DG.element()
+    nb_ddl_CR = dofmap_CR.global_dimension()
     dofmap_tens_DG_0 = tens_DG_0.dofmap()
-    nb_ddl_grad = len(dofmap_tens_DG_0.dofs())
+    nb_ddl_grad = dofmap_tens_DG_0.global_dimension()
 
     #assembling penalty factor
-    vol = CellVolume(mesh_)
-    hF = FacetArea(mesh_)
-    testt = TestFunction(U_CR)
-    helpp = Function(U_CR)
+    vol = CellVolume(problem.mesh)
+    hF = FacetArea(problem.mesh)
+    testt = TestFunction(problem.CR)
+    helpp = Function(problem.CR)
     helpp.vector().set_local(np.ones_like(helpp.vector().get_local()))
     a_aux = penalty_ * (2.*hF('+'))/ (vol('+') + vol('-')) * inner(helpp('+'), testt('+')) * dS
     mat = assemble(a_aux).get_local()
 
     #creating jump matrix
-    mat_jump_1 = dok_matrix((nb_ddl_CR,nb_ddl_ccG_))
+    mat_jump_1 = dok_matrix((nb_ddl_CR,problem.nb_dof_DEM))
     mat_jump_2 = dok_matrix((nb_ddl_CR,nb_ddl_grad))
-    for f in facets(mesh_):
-        if len(face_num.get(f.index())) == 2: #Face interne
+    for f in facets(problem.mesh):
+        if len(problem.facet_num.get(f.index())) == 2: #Face interne
             num_global_face = f.index()
             num_global_ddl = dofmap_CR.entity_dofs(mesh_, dim_ - 1, np.array([num_global_face], dtype="uintp"))
             coeff_pen = mat[num_global_ddl][0]
-            pos_bary_facet = dico_pos_bary_facet[f.index()] #position barycentre of facet
+            pos_bary_facet = bary_facets[f.index()] #position barycentre of facet
             #print(pos_bary_facet)
             for c,num_cell,sign in zip(cells(f),face_num.get(num_global_face),[1., -1.]):
                 #filling-in the DG 0 part of the jump
@@ -113,7 +116,7 @@ def penalty_FV(problem):
                     for i in range(dim_):
                         mat_jump_2[dof_CR,tens_dof_position[(num % d_)*d_ + i]] = sign*pen_diff[i]
             
-    mat_jump = mat_jump_1.tocsr() + mat_jump_2.tocsr() * mat_grad_ * passage_ccG_CR_
+    mat_jump = mat_jump_1.tocsr() + mat_jump_2.tocsr() * problem.mat_grad * problem.DEM_to_CR
     return mat_jump.T * mat_jump
 
 def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, num_ddl_vertex_ccG, mat_grad_, dico_pos_bary_facet, passage_ccG_CR_, pos_bary_cells):
@@ -126,9 +129,9 @@ def penalty_boundary(penalty_, nb_ddl_ccG_, mesh_, face_num, d_, num_ddl_vertex_
         tens_DG_0 = VectorFunctionSpace(mesh_, 'DG', 0)
         
     dofmap_CR = U_CR.dofmap()
-    nb_ddl_CR = len(dofmap_CR.dofs())
+    nb_ddl_CR = dofmap_CR.global_dimension()
     dofmap_tens_DG_0 = tens_DG_0.dofmap()
-    nb_ddl_grad = len(dofmap_tens_DG_0.dofs())
+    nb_ddl_grad = dofmap_tens_DG_0.global_dimension()
 
     #assembling penalty factor
     vol = CellVolume(mesh_)
