@@ -68,8 +68,6 @@ mat_pen = penalties(problem)
 
 A = AA1 + mat_pen# + A_pen_bis
 
-sys.exit()
-
 # Define variational problem
 u_CR = TrialFunction(U_CR)
 v_CR = TestFunction(U_CR)
@@ -80,25 +78,19 @@ u_DG_1 = TrialFunction(U_DG_1)
 v_DG_1 = TestFunction(U_DG_1)
 
 #Imposition des conditions de Dirichlet Homogène
-a4 = inner(v_CG('+'),as_vector((1.,1.))) / hF * ds
-A4 = assemble(a4)
-A_BC = passage_ccG_to_CG.T * A4.get_local()
+A_not_D,B = problem.for_dirichlet(A)
 
-#Prise en compte du chargement volumique à l'ancienne... Pour tester...
-L2 = F_ext(v_DG) #forme linéaire pour chargement volumique
-LL2 = assemble(L2)
-b2 = LL2.get_local() #en format DG
-bb2 = passage_ccG_to_DG.T * b2
-#bb2 = passage_ccG_to_DG_1.T * b2
+form_volume = F_ext(v_DG) #forme linéaire pour chargement volumique
+L = volume_load(form_volume, problem.DEM_to_DG)
 
-L = bb2
+##Imposing strongly Dirichlet BC
+#mat_not_D,mat_D = schur(A_BC)
+#print('matrices passage Schur ok')
+#A_D = mat_D * A * mat_D.T
+#A_not_D = mat_not_D * A * mat_not_D.T
+#B = mat_not_D * A * mat_D.T
 
-#Imposing strongly Dirichlet BC
-mat_not_D,mat_D = schur(A_BC)
-print('matrices passage Schur ok')
-A_D = mat_D * A * mat_D.T
-A_not_D = mat_not_D * A * mat_not_D.T
-B = mat_not_D * A * mat_D.T
+sys.exit()
 
 L_not_D = mat_not_D * L
 

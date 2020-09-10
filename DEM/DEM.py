@@ -6,6 +6,7 @@ import numpy as np
 from DEM.errors import *
 from DEM.reconstructions import compute_all_reconstruction_matrices,gradient_matrix
 from DEM.mesh_related import *
+from DEM.miscellaneous import Dirichlet_BC,schur
 
 class DEMProblem:
     """ Class that will contain the basics of a DEM problem from the mesh and the dimension of the problem to reconstrucion matrices and gradient matrix."""
@@ -43,6 +44,22 @@ class DEMProblem:
         #DEM reconstructions
         self.DEM_to_DG, self.DEM_to_CG, self.DEM_to_CR, self.DEM_to_DG_1 = compute_all_reconstruction_matrices(self)
         print('Reconstruction matrices ok!')
+
+        #Dirichlet conditions
+
+    def for_dirichlet(self, A, boundary_dirichlet=None):
+        hF = FacetArea(self.mesh)
+        v_CG = TestFunction(self.CG)
+        if boundary_dirichlet == None: #dependence on self.d ???
+            form_dirichlet = inner(v_CG('+'),as_vector((1.,1.))) / hF * ds
+        else:
+            form_dirichlet = inner(v_CG('+'),as_vector((1.,1.))) / hF * ds(boundary_dirichlet)
+        A_BC = Dirichlet_BC(form_dirichlet, self.DEM_to_CG)
+        self.mat_not_D,self.mat_D = schur(A_BC)
+        #A_D = mat_D * A * mat_D.T
+        A_not_D = self.mat_not_D * A * self.mat_not_D.T
+        B = self.mat_not_D * A * self.mat_D.T
+        return A_not_D,B
 
 
 def elastic_bilinear_form(mesh_, d_, DEM_to_CR_matrix, sigma=grad, eps=grad):

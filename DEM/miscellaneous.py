@@ -97,3 +97,32 @@ def DEM_interpolation(func, mesh_, d_, DEM_to_CG_, DEM_to_DG_):
         U_CG = FunctionSpace(mesh_, 'CG', 1)
 
     return DEM_to_DG_.T * local_project(func, U_DG).vector().get_local() + DEM_to_CG_.T * local_project(func, U_CG).vector().get_local()
+
+def Dirichlet_BC(form, DEM_to_CG):
+    L = assemble(form)
+    return DEM_to_CG.T * L.get_local()
+
+def volume_load(form, DEM_to_DG):
+    L = assemble(form)
+    return DEM_to_DG.T * L
+
+
+def schur(A_BC):
+    nb_ddl_ccG = A_BC.shape[0]
+    l = A_BC.nonzero()[0]
+    aux = set(l) #contains number of Dirichlet dof
+    nb_ddl_Dirichlet = len(aux)
+    aux_bis = set(range(nb_ddl_ccG))
+    aux_bis = aux_bis.difference(aux) #contains number of vertex non Dirichlet dof
+    sorted(aux_bis) #sort the set
+
+    #Get non Dirichlet values
+    mat_not_D = dok_matrix((nb_ddl_ccG - nb_ddl_Dirichlet, nb_ddl_ccG))
+    for (i,j) in zip(range(mat_not_D.shape[0]),aux_bis):
+        mat_not_D[i,j] = 1.
+
+    #Get Dirichlet boundary conditions
+    mat_D = dok_matrix((nb_ddl_Dirichlet, nb_ddl_ccG))
+    for (i,j) in zip(range(mat_D.shape[0]),aux):
+        mat_D[i,j] = 1.
+    return mat_not_D.tocsr(), mat_D.tocsr()
