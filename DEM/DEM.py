@@ -6,7 +6,7 @@ import numpy as np
 from DEM.errors import *
 from DEM.reconstructions import compute_all_reconstruction_matrices,gradient_matrix
 from DEM.mesh_related import *
-from DEM.miscellaneous import Dirichlet_BC,schur
+from DEM.miscellaneous import Dirichlet_BC,schur_matrices
 
 class DEMProblem:
     """ Class that will contain the basics of a DEM problem from the mesh and the dimension of the problem to reconstrucion matrices and gradient matrix."""
@@ -55,7 +55,7 @@ class DEMProblem:
         else:
             form_dirichlet = inner(v_CG('+'),as_vector((1.,1.))) / hF * ds(boundary_dirichlet)
         A_BC = Dirichlet_BC(form_dirichlet, self.DEM_to_CG)
-        self.mat_not_D,self.mat_D = schur(A_BC)
+        self.mat_not_D,self.mat_D = schur_matrices(A_BC)
         #A_D = mat_D * A * mat_D.T
         A_not_D = self.mat_not_D * A * self.mat_not_D.T
         B = self.mat_not_D * A * self.mat_D.T

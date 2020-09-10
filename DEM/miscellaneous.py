@@ -86,28 +86,23 @@ def local_project(v, V, u=None):
         solver.solve_local_rhs(u)
         return
 
-def DEM_interpolation(func, mesh_, d_, DEM_to_CG_, DEM_to_DG_):
+def DEM_interpolation(func, problem):
     """Interpolates a function or expression to return a DEM vector containg the interpolation."""
-    dim = mesh_.geometric_dimension()
-    if d_ == dim:
-        U_DG = VectorFunctionSpace(mesh_, 'DG', 0)
-        U_CG = VectorFunctionSpace(mesh_, 'CG', 1)
-    elif d_ == 1:
-        U_DG = FunctionSpace(mesh_, 'DG', 0)
-        U_CG = FunctionSpace(mesh_, 'CG', 1)
 
-    return DEM_to_DG_.T * local_project(func, U_DG).vector().get_local() + DEM_to_CG_.T * local_project(func, U_CG).vector().get_local()
+    return problem.DEM_to_DG.T * local_project(func, problem.DG_0).vector().get_local() + problem.DEM_to_CG.T * local_project(func, problem.CG).vector().get_local()
 
 def Dirichlet_BC(form, DEM_to_CG):
     L = assemble(form)
     return DEM_to_CG.T * L.get_local()
 
-def volume_load(form, DEM_to_DG):
+def assemble_volume_load(load, problem):
+    v = TestFunction(problem.DG_0)
+    form = inner(load, v) * dx
     L = assemble(form)
-    return DEM_to_DG.T * L
+    return problem.DEM_to_DG.T * L
 
 
-def schur(A_BC):
+def schur_matrices(A_BC):
     nb_ddl_ccG = A_BC.shape[0]
     l = A_BC.nonzero()[0]
     aux = set(l) #contains number of Dirichlet dof
@@ -126,3 +121,13 @@ def schur(A_BC):
     for (i,j) in zip(range(mat_D.shape[0]),aux):
         mat_D[i,j] = 1.
     return mat_not_D.tocsr(), mat_D.tocsr()
+
+def schur_complement(L, u_BC, B, problem):
+    L_not_D = problem.mat_not_D * L
+    u_BC_interpolate = interpolate(u_BC, problem.CG).vector().get_local()
+    u_BC_interpolate = problem.mat_D * problem.DEM_to_CG.T * u_BC_interpolate
+    L_not_D = L_not_D - B * u_BC_interpolate
+    return L_not_D,u_BC_interpolate
+
+def complete_solution(u_reduced, u_BC, problem):
+    return problem.mat_not_D.T * u_reduced + problem.mat_D.T * u_BC

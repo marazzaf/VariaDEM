@@ -21,12 +21,9 @@ def test_reconstruction(mesh):
     #DEM problem creation with reconstruction matrices
     problem = DEMProblem(mesh, d, 0.)
 
-    ##DEM reconstruction
-    #DEM_to_DG, DEM_to_CG, DEM_to_CR, DEM_to_DG_1, nb_dof_DEM = compute_all_reconstruction_matrices(mesh, d)
-
     #Testing P1 consistency and that's all
     x = SpatialCoordinate(mesh)
-    u = DEM_interpolation(x, mesh, d, problem.DEM_to_CG, problem.DEM_to_DG)
+    u = DEM_interpolation(x, problem)
     assert abs(max(u) - L) < eps
     assert abs(min(u) + L) < eps
 

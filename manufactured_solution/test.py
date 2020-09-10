@@ -4,6 +4,7 @@ sys.path.append('../')
 import matplotlib.pyplot as plt
 from scipy.sparse.linalg import spsolve,cg
 from DEM.DEM import *
+from DEM.miscellaneous import *
 from dolfin import *
 
 # Form compiler options
@@ -46,12 +47,6 @@ x = SpatialCoordinate(mesh)
 u_ref = Expression(('0.5 * a * (pow(x[0],2) + pow(x[1],2))', '0.5 * a * (pow(x[0],2) + pow(x[1],2))'), a=a, degree=2)
 Du_ref = Expression(( ('a * x[0]', 'a * x[1]'), ('a * x[0]', 'a * x[1]')), a=a, degree=1)
 
-n = FacetNormal(mesh)
-volume_load = -a * (lmbda + 3.*mu) * as_vector([1., 1.])
-
-def F_ext(v):
-    return inner(volume_load, v) * dx
-
 def eps(v):
     return sym(grad(v))
 
@@ -64,64 +59,56 @@ AA1 = elastic_bilinear_form(problem.mesh, problem.d, problem.DEM_to_CR, sigma, e
 #making the penalty term by hand... See if better...
 mat_pen = penalties(problem)
 
-#mat_pen_bnd = penalty_boundary(penalty, nb_dof_DEM, mesh, face_num, d, num_ddl_vertex_ccG, mat_grad, dico_pos_bary_faces, DEM_to_CR, pos_bary_cells)
+#Assembling rigidity matrix
+A = AA1 + mat_pen
 
-A = AA1 + mat_pen# + A_pen_bis
-
-# Define variational problem
-u_CR = TrialFunction(U_CR)
-v_CR = TestFunction(U_CR)
-v_DG = TestFunction(U_DG)
-u_CG = TrialFunction(U_CG)
-v_CG = TestFunction(U_CG)
-u_DG_1 = TrialFunction(U_DG_1)
-v_DG_1 = TestFunction(U_DG_1)
+## Define variational problem
+#u_CR = TrialFunction(U_CR)
+#v_CR = TestFunction(U_CR)
+#v_DG = TestFunction(U_DG)
+#u_CG = TrialFunction(U_CG)
+#v_CG = TestFunction(U_CG)
+#u_DG_1 = TrialFunction(U_DG_1)
+#v_DG_1 = TestFunction(U_DG_1)
 
 #Imposition des conditions de Dirichlet Homogène
 A_not_D,B = problem.for_dirichlet(A)
 
-form_volume = F_ext(v_DG) #forme linéaire pour chargement volumique
-L = volume_load(form_volume, problem.DEM_to_DG)
+#Volume load for rhs
+volume_load = -a * (lmbda + 3.*mu) * as_vector([1., 1.])
+#Assembling the rhs
+L = assemble_volume_load(volume_load, problem)
 
-##Imposing strongly Dirichlet BC
-#mat_not_D,mat_D = schur(A_BC)
-#print('matrices passage Schur ok')
-#A_D = mat_D * A * mat_D.T
-#A_not_D = mat_not_D * A * mat_not_D.T
-#B = mat_not_D * A * mat_D.T
+##Schur complement to solve with Dirichlet BC
+#L_not_D = mat_not_D * L
+#
+##interpolation of Dirichlet BC...
+#u_BC = interpolate(u_ref, U_CG).vector().get_local()
+#u_BC = mat_D * passage_ccG_to_CG.T * u_BC
+#L_not_D = L_not_D - B * u_BC
 
-sys.exit()
-
-L_not_D = mat_not_D * L
-
-#interpolation of Dirichlet BC...
-F = interpolate(u_ref, U_CG).vector().get_local()
-F = mat_D * passage_ccG_to_CG.T * F
-L_not_D = L_not_D - B * F
-
+L_not_D,u_BC = schur_complement(L, u_ref, B, problem)
 
 file_results = File("ccG_4_.pvd")
 res = open('res.txt', 'a')
 
 #solve
 print('Solve !')
-#u_reduced,info = cg(A_not_D, L_not_D)
-#assert(info == 0)
-u_reduced = spsolve(A_not_D, L_not_D)
-u = mat_not_D.T * u_reduced + mat_D.T * F
+u_reduced = spsolve(A_not_D, L_not_D) #exact solve to have the right convergence order
+#u = mat_not_D.T * u_reduced + mat_D.T * u_BC
+u = complete_solution(u_reduced, u_BC, problem)
 
-solution_u_CR.vector().set_local(passage_ccG_to_CR * u)
-solution_u_DG_1.vector().set_local(passage_ccG_to_DG_1 * u)
+solution_u_CR.vector().set_local(problem.DEM_to_CR * u)
+solution_u_DG_1.vector().set_local(problem.DEM_to_DG_1 * u)
 
 
 #sorties paraview
 file_results.write(solution_u_DG_1)
 
 #computation of errors
-#u_ref_DG_1 = interpolate(u_ref, U_DG_1)
-u_ref_ccG = passage_ccG_to_DG.T * interpolate(u_ref, U_DG).vector().get_local() + passage_ccG_to_CG.T * interpolate(u_ref, U_CG).vector().get_local()
+u_ref_DEM = DEM_interpolation(u_ref, problem)
 u_ref_DG_1 = Function(U_DG_1)
-u_ref_DG_1.vector().set_local(passage_ccG_to_DG_1 * u_ref_ccG)
+u_ref_DG_1.vector().set_local(problem.DEM_to_DG_1 * u_ref_DEM)
 error.vector().set_local(passage_ccG_to_DG_1 * u - u_ref_DG_1.vector().get_local())
 file_results.write(error)
 err_u_L2_DG_1 = errornorm(solution_u_DG_1, u_ref_DG_1, 'L2')
