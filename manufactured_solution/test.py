@@ -109,7 +109,7 @@ file_results.write(solution_u_DG_1)
 u_ref_DEM = DEM_interpolation(u_ref, problem)
 u_ref_DG_1 = Function(U_DG_1)
 u_ref_DG_1.vector().set_local(problem.DEM_to_DG_1 * u_ref_DEM)
-error.vector().set_local(passage_ccG_to_DG_1 * u - u_ref_DG_1.vector().get_local())
+error.vector().set_local(problem.DEM_to_DG_1 * u - u_ref_DG_1.vector().get_local())
 file_results.write(error)
 err_u_L2_DG_1 = errornorm(solution_u_DG_1, u_ref_DG_1, 'L2')
 print('err L2 DG 1: %.5e' % err_u_L2_DG_1)
@@ -119,20 +119,15 @@ print('err L2 CR: %.5e' % err_u_L2_CR)
 
 err_Du_L2 = errornorm(solution_u_CR, u_ref_CR, 'H10')
 
-u_ref_ccG = passage_ccG_to_DG.T * interpolate(u_ref, U_DG).vector().get_local() + passage_ccG_to_CG.T * interpolate(u_ref, U_CG).vector().get_local()
-diff = u - u_ref_ccG
-#err_energy = np.dot(diff, AA1 * diff) + np.dot(diff, A_pen * diff) + np.dot(diff, A_pen_bis * diff)
+diff = u - u_ref_DEM
 err_energy = np.dot(diff, A * diff)
 
 err_energy = np.sqrt(0.5 * err_energy)
 print('error energy: %.5e' % err_energy)
 print('discrete grad : %.5e' % err_Du_L2)
 print('error elastic energy: %.5e' % (0.5 * np.dot(diff, AA1 * diff)))
-#print('autres termes: %.5e' % (-0.5 * np.dot(diff, AA11 * diff)))
-print('pen DG : %.5e' % (0.5 * np.dot(diff, mat_pen * diff)))
-print('pen cell-vertex : %.5e' % (0.5 * np.dot( diff, A_pen_bis * diff)))
 
-res.write('%.5e %i %.5e %.5e %.5e\n' % (h_max, nb_ddl_ccG, err_u_L2_DG_1, err_energy, err_Du_L2) )
+res.write('%.5e %i %.5e %.5e %.5e\n' % (h_max, problem.nb_dof_DEM, err_u_L2_DG_1, err_energy, err_Du_L2) )
 
 #close file
 res.close()
