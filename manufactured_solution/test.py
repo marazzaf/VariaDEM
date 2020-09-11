@@ -21,7 +21,7 @@ penalty = mu
 
 Ll, l = 1., 1. #0.1   # sizes in rectangular mesh
 a = 0.8 #rapport pour déplacement max...
-mesh = Mesh("./mesh/square_1.xml")
+mesh = Mesh("./mesh/square_4.xml")
 facets = MeshFunction("size_t", mesh, 1)
 ds = Measure('ds')(subdomain_data=facets)
 h_max = mesh.hmax() #Taille du maillage.
