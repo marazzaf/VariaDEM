@@ -5,9 +5,6 @@ from DEM.DEM import *
 from DEM.miscellaneous import DEM_interpolation,local_project
 import pytest
 
-#import pytest #for unit tests
-eps_2 = 1.e-12
-
 #Size of mesh and number of elements
 L = 0.5
 nb_elt = 3
@@ -43,11 +40,11 @@ def test_reconstruction(mesh):
     assert round(min(gradient_vec[:,1,1]),12) == 1. and round(max(gradient_vec[:,1,1]),12) == 1.
     #More tests for 3d functions
     if d == 3:
-        assert abs(min(gradient_vec[:,0,2])) < eps_2 and abs(max(gradient_vec[:,0,2])) < eps_2
-        assert abs(min(gradient_vec[:,2,0])) < eps_2 and abs(max(gradient_vec[:,2,0])) < eps_2
-        assert abs(min(gradient_vec[:,1,2])) < eps_2 and abs(max(gradient_vec[:,1,2])) < eps_2
-        assert abs(min(gradient_vec[:,2,1])) < eps_2 and abs(max(gradient_vec[:,2,1])) < eps_2
-        assert abs(min(gradient_vec[:,2,2]) - 1.) < eps_2 and abs(max(gradient_vec[:,2,2]) - 1.) < eps_2
+        assert round(min(gradient_vec[:,0,2]),12) == 0. and round(max(gradient_vec[:,0,2]),12) == 0.
+        assert round(min(gradient_vec[:,2,0]),12) == 0. and round(max(gradient_vec[:,2,0]),12) == 0.
+        assert round(min(gradient_vec[:,1,2]),12) == 0. and round(max(gradient_vec[:,1,2]),12) == 0.
+        assert round(min(gradient_vec[:,2,1]),12) == 0. and round(max(gradient_vec[:,2,1]),12) == 0.
+        assert round(min(gradient_vec[:,2,2]),12) == 1. and round(max(gradient_vec[:,2,2]),12) == 1.
         
 
     #Outputfile
@@ -66,16 +63,16 @@ def test_reconstruction(mesh):
     gradient_vec = gradient_DG.vector().get_local()
     gradient_vec  = gradient_vec.reshape((problem.DG_0.dim() // d,d,dim))
     assert round(min(gradient_vec[:,0,0]),12) == 1. and round(max(gradient_vec[:,0,0]),12) == 1.
-    assert abs(min(gradient_vec[:,0,1])) < eps_2 and abs(max(gradient_vec[:,0,1])) < eps_2
-    assert abs(min(gradient_vec[:,1,0])) < eps_2 and abs(max(gradient_vec[:,1,0])) < eps_2
-    assert abs(min(gradient_vec[:,1,1]) - 1.) < eps_2 and abs(max(gradient_vec[:,1,1]) - 1.) < eps_2
+    assert round(min(gradient_vec[:,0,1]),12) == 0. and round(max(gradient_vec[:,0,1]),12) == 0.
+    assert round(min(gradient_vec[:,1,0]),12) == 0. and round(max(gradient_vec[:,1,0]),12) == 0.
+    assert round(min(gradient_vec[:,1,1]),12) == 1. and round(max(gradient_vec[:,1,1]),12) == 1. 
     #More tests for 3d functions
     if d == 3:
-        assert abs(min(gradient_vec[:,0,2])) < eps_2 and abs(max(gradient_vec[:,0,2])) < eps_2
-        assert abs(min(gradient_vec[:,2,0])) < eps_2 and abs(max(gradient_vec[:,2,0])) < eps_2
-        assert abs(min(gradient_vec[:,1,2])) < eps_2 and abs(max(gradient_vec[:,1,2])) < eps_2
-        assert abs(min(gradient_vec[:,2,1])) < eps_2 and abs(max(gradient_vec[:,2,1])) < eps_2
-        assert abs(min(gradient_vec[:,2,2]) - 1.) < eps_2 and abs(max(gradient_vec[:,2,2]) - 1.) < eps_2
+        assert round(min(gradient_vec[:,0,2]),12) == 0. and round(max(gradient_vec[:,0,2]),12) == 0.
+        assert round(min(gradient_vec[:,2,0]),12) == 0. and round(max(gradient_vec[:,2,0]),12) == 0.
+        assert round(min(gradient_vec[:,1,2]),12) == 0. and round(max(gradient_vec[:,1,2]),12) == 0.
+        assert round(min(gradient_vec[:,2,1]),12) == 0. and round(max(gradient_vec[:,2,1]),12) == 0.
+        assert round(min(gradient_vec[:,2,2]),12) == 1. and round(max(gradient_vec[:,2,2]),12) == 1.
 
 
     #Outputfile
