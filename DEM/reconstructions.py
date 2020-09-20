@@ -4,7 +4,6 @@ from dolfin import *
 from numpy import array,arange,append
 from scipy.spatial import ConvexHull, Delaunay, KDTree
 from DEM.mesh_related import *
-from DEM.errors import *
 
 def DEM_to_DG_matrix(problem,nb_dof_ccG_):
     """Creates a csr companion matrix to get the cells values of a DEM vector."""
@@ -140,7 +139,7 @@ def facet_interpolation(facet_num,pos_bary_cells,pos_vert,pos_bary_facets,dim_,d
                 res_pos[f] = aux_pos
             
             else:
-                raise ConvexError('Not possible to find a convex containing the barycenter of the facet.\n')
+                raise Error('Not possible to find a convex containing the barycenter of the facet.\n')
                                 
     return res_num,res_coord
 

@@ -27,21 +27,15 @@ def test_reconstruction(mesh):
     assert abs(max(u) - L) < eps
     assert abs(min(u) + L) < eps
 
-    #Functional Spaces
-    U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
-    U_DG_1 = VectorFunctionSpace(mesh, 'DG', 1)
-    U_CR = VectorFunctionSpace(mesh, 'CR', 1) #Pour interpollation dans les faces
-    W = TensorFunctionSpace(mesh, 'DG', 0)
-
     #CR interpolation
-    test_CR = Function(U_CR)
+    test_CR = Function(problem.CR)
     reco_CR = problem.DEM_to_CR * u
     test_CR.vector().set_local(reco_CR)
     assert abs(max(reco_CR) - L) < eps
     assert abs(min(reco_CR) + L) < eps
 
     #Test on gradient
-    gradient = local_project(grad(test_CR), W)
+    gradient = local_project(grad(test_CR), problem.W)
     gradient_vec = gradient.vector().get_local()
     gradient_vec  = gradient_vec.reshape((U_DG.dim() // d,d,dim))
     assert abs(min(gradient_vec[:,0,0]) - 1.) < eps_2 and abs(max(gradient_vec[:,0,0]) - 1.) < eps_2
@@ -63,7 +57,7 @@ def test_reconstruction(mesh):
     #file.write(gradient)
 
     #P1-discontinuous reconstruction
-    test_DG_1 = Function(U_DG_1)
+    test_DG_1 = Function(problem.DG_1)
     test_DG_1.vector().set_local(problem.DEM_to_DG_1 * u)
     assert abs(max(test_DG_1.vector().get_local()) - L) < eps
     assert abs(min(test_DG_1.vector().get_local()) + L) < eps

@@ -17,24 +17,26 @@ E = Constant(70e3)
 nu = Constant(0.3)
 lmbda = E*nu/(1+nu)/(1-2*nu)
 mu = E/2./(1+nu)
-penalty = mu
+penalty = 2*mu
+#Length of square domaine
+L = 1.
+a = 0.8 #Parameter of analytical solution
 
-Ll, l = 1., 1. #0.1   # sizes in rectangular mesh
-a = 0.8 #rapport pour déplacement max...
-mesh = Mesh("./mesh/square_4.xml")
-facets = MeshFunction("size_t", mesh, 1)
-ds = Measure('ds')(subdomain_data=facets)
-h_max = mesh.hmax() #Taille du maillage.
-d = mesh.geometric_dimension() #vectorial problem
+def manufactured_solution_computation(nb_elt):
+    mesh = RectangleMesh(Point(-L,-L),Point(L,L),nb_elt,nb_elt,"crossed")
+    facets = MeshFunction("size_t", mesh, 1)
+    ds = Measure('ds')(subdomain_data=facets)
+    h_max = mesh.hmax() #Taille du maillage.
+    d = mesh.geometric_dimension() #vectorial problem
 
-#Creating the DEM problem
-problem = DEMProblem(mesh, d, penalty)
+    #Creating the DEM problem
+    problem = DEMProblem(mesh, d, penalty)
 
-#Function spaces
-U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
-U_DG_1 = VectorFunctionSpace(mesh, 'DG', 1) #Pour reconstruction ccG
-U_CR = VectorFunctionSpace(mesh, 'CR', 1) #Pour interpollation dans les faces
-U_CG = VectorFunctionSpace(mesh, 'CG', 1) #Pour bc
+    #Function spaces
+    U_DG = VectorFunctionSpace(mesh, 'DG', 0) #Pour délacement dans cellules
+    U_DG_1 = VectorFunctionSpace(mesh, 'DG', 1) #Pour reconstruction ccG
+    U_CR = VectorFunctionSpace(mesh, 'CR', 1) #Pour interpollation dans les faces
+    U_CG = VectorFunctionSpace(mesh, 'CG', 1) #Pour bc
 
 #Functions for computation
 solution_u_CR = Function(U_CR,  name="CR")
@@ -61,15 +63,6 @@ mat_pen = penalties(problem)
 
 #Assembling rigidity matrix
 A = AA1 + mat_pen
-
-## Define variational problem
-#u_CR = TrialFunction(U_CR)
-#v_CR = TestFunction(U_CR)
-#v_DG = TestFunction(U_DG)
-#u_CG = TrialFunction(U_CG)
-#v_CG = TestFunction(U_CG)
-#u_DG_1 = TrialFunction(U_DG_1)
-#v_DG_1 = TestFunction(U_DG_1)
 
 #Imposition des conditions de Dirichlet Homogène
 A_not_D,B = problem.for_dirichlet(A)
@@ -131,86 +124,3 @@ res.write('%.5e %i %.5e %.5e %.5e\n' % (h_max, problem.nb_dof_DEM, err_u_L2_DG_1
 
 #close file
 res.close()
-
-
-#plot_err_CR = abs((solution_u_CR - u_ref_CR)[0])
-#fig = plot(plot_err_CR)
-#plt.colorbar(fig, shrink=0.5, aspect=10)
-#plt.title('err x')
-#plt.show()
-#
-#plot_err_CR = abs((solution_u_CR - u_ref_CR)[1])
-#fig = plot(plot_err_CR)
-#plt.colorbar(fig, shrink=0.5, aspect=10)
-#plt.title('err y')
-#plt.show()
-#
-###plot errors
-##plot_err_DG = abs((solution_u_DG - u_ref_DG)[0]) # - mean_u
-##fig = plot(plot_err_DG)
-##plt.colorbar(fig, shrink=0.5, aspect=10)
-##plt.title('x')
-##plt.show()
-##
-##plot_err_DG = abs((solution_u_DG - u_ref_DG)[1]) # - mean_u
-##fig = plot(plot_err_DG)
-##plt.colorbar(fig, shrink=0.5, aspect=10)
-##plt.title('y')
-##plt.show()
-#
-#plot_err_grad = abs((grad(solution_u_CR) - Du_reff)[0,0])
-#fig = plot(plot_err_grad)
-#plt.colorbar(fig, shrink=0.5, aspect=10)
-#plt.title('err Du')
-#plt.show()
-#
-#
-##computed solution versus ref
-#
-#plot_CR = sqrt((solution_u_CR)**2) # - mean_u
-#fig = plot(plot_CR)
-#plt.colorbar(fig, shrink=0.5, aspect=10)
-#plt.savefig('disp.pdf')
-#plt.title('Norm of displacement ')
-#plt.show()
-#
-#plot_CR = sqrt((u_ref_CR)**2) # - mean_u
-#fig = plot(plot_CR)
-#plt.colorbar(fig, shrink=0.5, aspect=10)
-#plt.title('Reference norm of displacement')
-#plt.savefig('ref_disp.pdf')
-#plt.show()
-#
-##plot_CR = (solution_u_CR)[0] # - mean_u
-##fig = plot(plot_CR)
-##plt.colorbar(fig, shrink=0.5, aspect=10)
-##plt.title('x')
-##plt.show()
-##
-##fig = plot(u_ref_CR[0])
-##plt.colorbar(fig, shrink=0.5, aspect=10)
-##plt.title('ref x')
-##plt.show()
-##
-##plot_CR = (solution_u_CR)[1] # - mean_u
-##fig = plot(plot_CR)
-##plt.colorbar(fig, shrink=0.5, aspect=10)
-##plt.title('y')
-##plt.show()
-##
-##fig = plot(u_ref_CR[1])
-##plt.colorbar(fig, shrink=0.5, aspect=10)
-##plt.title('ref y')
-##plt.show()
-##
-##fig = plot(grad(solution_u_CR)[0,0])
-##plt.colorbar(fig, shrink=0.5, aspect=10)
-##plt.title('Du')
-##plt.savefig('Du.pdf')
-##plt.show()
-##
-##fig = plot(Du_reff[0,0])
-##plt.colorbar(fig, shrink=0.5, aspect=10)
-##plt.title('Du ref')
-##plt.savefig('Du_ref.pdf')
-##plt.show()

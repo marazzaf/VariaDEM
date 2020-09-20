@@ -3,7 +3,6 @@
 from dolfin import *
 from scipy.sparse import csr_matrix,dok_matrix
 import numpy as np
-from DEM.errors import *
 from DEM.reconstructions import compute_all_reconstruction_matrices,gradient_matrix
 from DEM.mesh_related import *
 from DEM.miscellaneous import Dirichlet_BC,schur_matrices
