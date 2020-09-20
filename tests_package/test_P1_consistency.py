@@ -6,8 +6,7 @@ from DEM.miscellaneous import DEM_interpolation,local_project
 import pytest
 
 #import pytest #for unit tests
-eps = 2e-15 #constant to compare floats. Possible to find a Python constant with that value ?
-eps_2 = 1e-12 #constant to compare gradients to zero
+eps_2 = 1.e-12
 
 #Size of mesh and number of elements
 L = 0.5
@@ -24,24 +23,24 @@ def test_reconstruction(mesh):
     #Testing P1 consistency and that's all
     x = SpatialCoordinate(mesh)
     u = DEM_interpolation(x, problem)
-    assert abs(max(u) - L) < eps
-    assert abs(min(u) + L) < eps
+    assert round(max(u),15) == L
+    assert round(min(u),15) == -L
 
     #CR interpolation
     test_CR = Function(problem.CR)
     reco_CR = problem.DEM_to_CR * u
     test_CR.vector().set_local(reco_CR)
-    assert abs(max(reco_CR) - L) < eps
-    assert abs(min(reco_CR) + L) < eps
+    assert round(max(reco_CR),14) == L
+    assert round(min(reco_CR),14)  == -L
 
     #Test on gradient
     gradient = local_project(grad(test_CR), problem.W)
     gradient_vec = gradient.vector().get_local()
-    gradient_vec  = gradient_vec.reshape((U_DG.dim() // d,d,dim))
-    assert abs(min(gradient_vec[:,0,0]) - 1.) < eps_2 and abs(max(gradient_vec[:,0,0]) - 1.) < eps_2
-    assert abs(min(gradient_vec[:,0,1])) < eps_2 and abs(max(gradient_vec[:,0,1])) < eps_2
-    assert abs(min(gradient_vec[:,1,0])) < eps_2 and abs(max(gradient_vec[:,1,0])) < eps_2
-    assert abs(min(gradient_vec[:,1,1]) - 1.) < eps_2 and abs(max(gradient_vec[:,1,1]) - 1.) < eps_2
+    gradient_vec  = gradient_vec.reshape((problem.DG_0.dim() // d,d,dim))
+    assert round(min(gradient_vec[:,0,0]),12) == 1. and round(max(gradient_vec[:,0,0]),12) == 1.
+    assert round(min(gradient_vec[:,0,1]),12) == 0. and round(max(gradient_vec[:,0,1]),12) == 0.
+    assert round(min(gradient_vec[:,1,0]),12) == 0. and round(max(gradient_vec[:,1,0]),12) == 0.
+    assert round(min(gradient_vec[:,1,1]),12) == 1. and round(max(gradient_vec[:,1,1]),12) == 1.
     #More tests for 3d functions
     if d == 3:
         assert abs(min(gradient_vec[:,0,2])) < eps_2 and abs(max(gradient_vec[:,0,2])) < eps_2
@@ -59,14 +58,14 @@ def test_reconstruction(mesh):
     #P1-discontinuous reconstruction
     test_DG_1 = Function(problem.DG_1)
     test_DG_1.vector().set_local(problem.DEM_to_DG_1 * u)
-    assert abs(max(test_DG_1.vector().get_local()) - L) < eps
-    assert abs(min(test_DG_1.vector().get_local()) + L) < eps
+    assert round(max(test_DG_1.vector().get_local()),14) == L
+    assert round(min(test_DG_1.vector().get_local()),14) ==  -L
 
     #Test on gradient
-    gradient_DG = local_project(grad(test_DG_1), W)
+    gradient_DG = local_project(grad(test_DG_1), problem.W)
     gradient_vec = gradient_DG.vector().get_local()
-    gradient_vec  = gradient_vec.reshape((U_DG.dim() // d,d,dim))
-    assert abs(min(gradient_vec[:,0,0]) - 1.) < eps_2 and abs(max(gradient_vec[:,0,0]) - 1.) < eps_2
+    gradient_vec  = gradient_vec.reshape((problem.DG_0.dim() // d,d,dim))
+    assert round(min(gradient_vec[:,0,0]),12) == 1. and round(max(gradient_vec[:,0,0]),12) == 1.
     assert abs(min(gradient_vec[:,0,1])) < eps_2 and abs(max(gradient_vec[:,0,1])) < eps_2
     assert abs(min(gradient_vec[:,1,0])) < eps_2 and abs(max(gradient_vec[:,1,0])) < eps_2
     assert abs(min(gradient_vec[:,1,1]) - 1.) < eps_2 and abs(max(gradient_vec[:,1,1]) - 1.) < eps_2
