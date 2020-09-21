@@ -1,15 +1,18 @@
 #coding: utf-8
 
 """
-        * * * Module DEM * * *
+        * * * Package DEM * * *
  
-Ce module contient 4 sous modules :
-        * core
-        * utils
-        * dos
-        * bandes
+This package contains 4 subpackages :
+        * mesh_related
+        * reconstructions
+        * DEM
+        * miscellaneous
  
-je vous passe le blabla
+* mesh_related contains all functions that have to do with the mesh and the links between facets, cells and vertices.
+* reconstructions contains the computation of the reconstruction matrices and the interpolation for the facet reconstruction.
+* DEM contains the definition of the DEMproblem class.
+* miscellaneous contains the interpolation of a function in a DEM array and other useful functions like the penalty matrices.
  
 """
 
