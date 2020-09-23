@@ -43,3 +43,4 @@ __date__    = "Friday September 22th 2020"
 from DEM.mesh_related import *
 from DEM.reconstructions import *
 from DEM.miscellaneous import *
+from DEM.DEM import *
