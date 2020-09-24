@@ -78,22 +78,14 @@ class DEMProblem:
         return A_not_D,B
 
 
-def elastic_bilinear_form(mesh_, d_, DEM_to_CR_matrix, sigma=grad, eps=grad):
-    dim = mesh_.geometric_dimension()
-    if d_ == 1:
-        U_CR = FunctionSpace(mesh_, 'CR', 1)
-    elif d_ == dim:
-        U_CR = VectorFunctionSpace(mesh_, 'CR', 1)
-    else:
-        raise ValueError('Problem is either scalar or vectorial (in 2d and 3d)')
+def elastic_bilinear_form(problem, sigma=grad, eps=grad):
+    """ Assembles the matrix of the linear system. eps is the strain function and sigma the stress function taking a displacement as an entry."""
+    u_CR = TrialFunction(problem.CR)
+    v_CR = TestFunction(problem.CR)
 
-    u_CR = TrialFunction(U_CR)
-    v_CR = TestFunction(U_CR)
-
-    #Mettre eps et sigma en arguments de la fonction ?
-    if d_ == 1:
+    if problem.d == 1:
         a1 = eps(u_CR) * sigma(v_CR) * dx
-    elif d_ == dim:
+    elif problem.d == problem.dim:
         a1 = inner(eps(u_CR), sigma(v_CR)) * dx
     else:
         raise ValueError('Problem is either scalar or vectorial (in 2d and 3d)')
@@ -101,7 +93,7 @@ def elastic_bilinear_form(mesh_, d_, DEM_to_CR_matrix, sigma=grad, eps=grad):
     A1 = assemble(a1)
     row,col,val = as_backend_type(A1).mat().getValuesCSR()
     A1 = csr_matrix((val, col, row))
-    return DEM_to_CR_matrix.T * A1 * DEM_to_CR_matrix
+    return problem.DEM_to_CR.T * A1 * problem.DEM_to_CR
 
 def penalties(problem):
     """Creates the penalty matrix to stabilize the DEM."""
@@ -173,3 +165,78 @@ def penalties(problem):
             
     mat_jump = mat_jump_1.tocsr() + mat_jump_2.tocsr() * problem.mat_grad * problem.DEM_to_CR
     return mat_jump.T * mat_jump
+
+def penalty_bnd(problem):
+    """Creates the penalty matrix on boundary facets to stabilize the DEM."""
+
+    if problem.d == problem.dim:
+        tens_DG_0 = TensorFunctionSpace(problem.mesh, 'DG', 0)
+    elif problem.d == 1:
+        tens_DG_0 = VectorFunctionSpace(problem.mesh, 'DG', 0)
+    else:
+        raise ValueError
+        
+    dofmap_CR = problem.CR.dofmap()
+    elt_DG = problem.DG_0.element()
+    nb_ddl_CR = dofmap_CR.global_dimension()
+    dofmap_tens_DG_0 = tens_DG_0.dofmap()
+    nb_ddl_grad = dofmap_tens_DG_0.global_dimension()
+
+    #assembling penalty factor
+    vol = CellVolume(problem.mesh)
+    hF = FacetArea(problem.mesh)
+    testt = TestFunction(problem.CR)
+    helpp = Function(problem.CR)
+    helpp.vector().set_local(np.ones_like(helpp.vector().get_local()))
+    a_aux = problem.penalty * hF / vol * inner(helpp, testt) * ds
+    mat = assemble(a_aux).get_local()
+
+    #creating jump matrix
+    mat_jump_1 = dok_matrix((nb_ddl_CR,problem.nb_dof_DEM))
+    mat_jump_2 = dok_matrix((nb_ddl_CR,nb_ddl_grad))
+    for f in facets(problem.mesh):
+        num_global_face = f.index()
+        num_global_ddl = dofmap_CR.entity_dofs(problem.mesh, problem.dim - 1, np.array([num_global_face], dtype="uintp"))
+        coeff_pen = mat[num_global_ddl][0]
+        pos_bary_facet = problem.bary_facets[f.index()] #position barycentre of facet
+        
+        if len(problem.facet_num.get(f.index())) == 1: #Face sur le bord car n'a qu'un voisin
+            #cell part
+            #filling-out the DG 0 part of the jump
+            num_cell = problem.facet_num.get(f.index())[0]
+            mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,problem.d * num_cell : (num_cell+1) * problem.d] = np.sqrt(coeff_pen)*np.eye(problem.d)
+
+            #filling-out the DG 1 part of the jump
+            pos_bary_cell = problem.bary_cells.get(num_cell)
+            diff = pos_bary_facet - pos_bary_cell
+            pen_diff = np.sqrt(coeff_pen)*diff
+            tens_dof_position = dofmap_tens_DG_0.cell_dofs(num_cell)
+            for num,dof_CR in enumerate(num_global_ddl):
+                for i in range(problem.dim):
+                    mat_jump_2[dof_CR,tens_dof_position[(num % problem.d)*problem.d + i]] = pen_diff[i]
+
+            #boundary facet part
+            for v in vertices(f):
+                dof_vert = problem.num_ddl_vertex.get(v.index())
+                mat_jump_1[num_global_ddl[0]:num_global_ddl[-1]+1,dof_vert[0]:dof_vert[-1]+1] = -np.sqrt(coeff_pen)*np.eye(problem.d) / problem.d
+            
+    mat_jump = mat_jump_1.tocsr() + mat_jump_2.tocsr() * problem.mat_grad * problem.DEM_to_CR
+    return mat_jump.T * mat_jump
+
+def inner_penalty(problem):
+    """Creates the penalty matrix on inner facets to stabilize the DEM."""
+
+    #assembling penalty factor
+    vol = CellVolume(problem.mesh)
+    hF = FacetArea(problem.mesh)
+    u = TrialFunction(problem.DG_1)
+    v = TestFunction(problem.DG_1)
+    mat_pen = problem.penalty * (2.*hF('+'))/ (vol('+') + vol('-')) * inner(jump(u), jump(v)) * dS
+
+    Mat_pen = assemble(mat_pen)
+    row,col,val = as_backend_type(Mat_pen).mat().getValuesCSR()
+    Mat_pen = csr_matrix((val, col, row))
+    return problem.DEM_to_CR_matrix.T * Mat_pen * DEM_to_CR_matrix
+
+    
+    

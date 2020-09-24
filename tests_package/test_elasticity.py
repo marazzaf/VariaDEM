@@ -70,7 +70,7 @@ def test_elasticity(mesh):
         return lmbda * div(v) * Identity(problem.dim) + 2. * mu * eps(v)
 
     #Elastic bilinear form
-    AA1 = elastic_bilinear_form(problem.mesh, problem.d, problem.DEM_to_CR, sigma, eps)
+    AA1 = elastic_bilinear_form(problem, sigma, eps)
 
     #making the penalty term by hand... See if better...
     mat_pen = penalties(problem)
