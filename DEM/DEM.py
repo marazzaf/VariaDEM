@@ -59,7 +59,6 @@ class DEMProblem:
 
         #DEM reconstructions
         self.DEM_to_DG, self.DEM_to_CG, self.DEM_to_CR, self.DEM_to_DG_1 = compute_all_reconstruction_matrices(self)
-        print('Reconstruction matrices ok!')
 
         #Dirichlet conditions
 
@@ -236,7 +235,7 @@ def inner_penalty(problem):
     Mat_pen = assemble(mat_pen)
     row,col,val = as_backend_type(Mat_pen).mat().getValuesCSR()
     Mat_pen = csr_matrix((val, col, row))
-    return problem.DEM_to_CR_matrix.T * Mat_pen * DEM_to_CR_matrix
+    return problem.DEM_to_DG_1.T * Mat_pen * problem.DEM_to_DG_1
 
     
     
